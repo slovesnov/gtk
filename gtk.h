@@ -11,6 +11,7 @@
 #include <gtkmm/button.h>
 #include <gtkmm/cssprovider.h>
 #include <gtkmm/drawingarea.h>
+#include <gtkmm/icontheme.h>
 #include <gtkmm/scrolledwindow.h>
 #include <gtkmm/styleprovider.h>
 #include <gtkmm/textview.h>
@@ -23,7 +24,8 @@
 using Figure = std::vector<std::vector<int>>;
 using VFigure = std::vector<Figure>;
 
-int DEBUG = 0;
+int debug = 0;
+int saveText = 0;
 const int TIMER_MILLISECONDS = 1200;
 const int SAVE_TIMER_MILLISECONDS = 3000;
 const int N = 8;
@@ -48,6 +50,7 @@ const uint32_t EMPTY[] = {0xff9c2469, 0xff952463, 0xff8e245c, 0xff872355,
                           0xff7f224d, 0xff782247, 0xff702240, 0xff692139};
 const int ADD_INDEX = 1;
 const std::string SAVE = "save";
+const std::string SAVE_TEXT = "save text";
 int gtotalWidth, field[N][N];
 Figure figures[3];
 uint32_t *gp;
@@ -63,6 +66,7 @@ std::string possibleString(int possible, int o);
 int countPossible(const int field[N][N]);
 int countFill(const int field[N][N]);
 std::string join(const std::vector<std::string> &vs);
+std::string currentTimeString();
 
 struct Info {
   int x, y, x1, y1, x2, y2, estimate, lines, end, possibleAfter, field[N][N],
@@ -208,12 +212,15 @@ std::string bestString();
 
 class MyWindow : public Gtk::Window {
 public:
-  MyWindow() : m_buttonSave(SAVE), m_buttonDebug() {
+  MyWindow()
+      : m_buttonSave(SAVE), m_buttonSaveText(SAVE_TEXT), m_buttonDebug() {
     int i;
     pWindow = this;
     m_title = std::format("gtkmm {}.{}.{}", GTKMM_MAJOR_VERSION,
                           GTKMM_MINOR_VERSION, GTKMM_MICRO_VERSION);
     set_title(m_title);
+
+    set_icon_name("app-icon");
 
     // std::string css_data = "textview {"
     //                        "  font-family: 'Monospace', monospace;"
@@ -241,6 +248,7 @@ public:
 
     auto box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
     box->append(m_buttonSave);
+    box->append(m_buttonSaveText);
     box->append(m_buttonDebug);
     box->append(m_drawing_area);
     box->append(m_scrolled_window[1]);
@@ -259,24 +267,19 @@ public:
     m_buttonSave.signal_clicked().connect(
         [this]() { get_screenshot_winapi(true); });
 
-    m_buttonDebug.signal_clicked().connect([this]() {
-      // #ifdef _WIN32
-      //       HWND hwnd = FindWindowA(NULL, m_title.c_str());
-      //       if (hwnd != NULL) {
-      //         SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE |
-      //         SWP_NOSIZE);
-      //       }
-      // #endif
+    m_buttonSaveText.signal_clicked().connect([this]() {
+      saveText = 1;
+      m_buttonSaveText.set_label("waiting...");
+    });
 
+    m_buttonDebug.signal_clicked().connect([this]() {
       //       auto dialog =
       //           new Gtk::FontChooserDialog("Выберите шрифт для сетки",
       //           *this);
       //       dialog->set_modal(true);
       //       dialog->show();
 
-      DEBUG = !DEBUG;
-      // std::ofstream file(LOG, std::ios::trunc);
-      // file.close();
+      debug = !debug;
       setDebugButtonText();
     });
 
@@ -347,9 +350,6 @@ public:
           }
         }
       }
-      // nf[0][0] = {0, 1, 2, 3};
-      // nf[1][1] = {0, 1, 2};
-      // nf[2][2] = {0, 1};
 
       for (y = 0; y < N; y++) {
         for (x = 0; x < N; x++) {
@@ -429,7 +429,7 @@ public:
   }
 
   void setDebugButtonText() {
-    m_buttonDebug.set_label(DEBUG ? "debug:on" : "debug:off");
+    m_buttonDebug.set_label(debug ? "debug:on" : "debug:off");
   }
 
   void updateSaveButton(std::string &s) {
@@ -443,8 +443,19 @@ public:
   }
 
   bool timer() {
+    int i;
     gets();
-    for (int i = 0; i < 2; i++) {
+    if (saveText) {
+      std::ofstream file(LOG, std::ios::app);
+      file << currentTimeString() << "\n";
+      for (i = 0; i < 2; i++) {
+        file << m_out[i];
+      }
+      file.close();
+      saveText = 0;
+      m_buttonSaveText.set_label(SAVE_TEXT);
+    }
+    for (i = 0; i < 2; i++) {
       m_text_view[i].get_buffer()->set_text(m_out[i]);
     }
     return true;
@@ -597,12 +608,6 @@ public:
         std::format("squares {}", toString(squares)),
         std::format("map {}/{}", m_vec.size(), 5 + 2 + MAP.size()),
         std::format("time {:%T}", sec)};
-
-    // if (gameBegin != std::chrono::steady_clock::time_point{} &&
-    //     sec != std::chrono::seconds{0}) {
-    //   vs.push_back(std::format("time {:%T}", sec));
-    // }
-
     s += join(vs);
 
     m_out[0] = s;
@@ -624,8 +629,7 @@ public:
   Gtk::ScrolledWindow m_scrolled_window[2];
   Gtk::TextView m_text_view[2];
   std::string m_out[2];
-  Gtk::Button m_buttonSave;
-  Gtk::Button m_buttonDebug;
+  Gtk::Button m_buttonSave, m_buttonSaveText, m_buttonDebug;
   Gtk::DrawingArea m_drawing_area;
   std::string m_prev, m_prevfields;
   std::vector<FigureStatistics> m_vec;
@@ -633,7 +637,14 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-  auto app = Gtk::Application::create("org.gtkmm.textarea_example");
+  auto app = Gtk::Application::create("com.example.myapp");
+  app->signal_startup().connect([app]() {
+    auto display = Gdk::Display::get_default();
+    if (display) {
+      auto icon_theme = Gtk::IconTheme::get_for_display(display);
+      icon_theme->add_resource_path("/com/example/myapp");
+    }
+  });
   return app->make_window_and_run<MyWindow>(argc, argv);
 }
 
@@ -693,20 +704,23 @@ Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int crop_x, int crop_y, int crop_w,
   );
 }
 
+std::string currentTimeString() {
+  auto now = std::chrono::system_clock::now();
+  std::time_t time_now = std::chrono::system_clock::to_time_t(now);
+  std::tm *local_tm = std::localtime(&time_now);
+
+  std::stringstream ss;
+  ss << std::put_time(local_tm, "%Y%m%d-%H%M%S");
+  return ss.str();
+}
+
 void savePng(int crop_x, int crop_y, int crop_w, int crop_h) {
   auto pixbuf = createPixbuf(crop_x, crop_y, crop_w, crop_h);
 
   std::string s;
   if (pixbuf) {
     try {
-      auto now = std::chrono::system_clock::now();
-      std::time_t time_now = std::chrono::system_clock::to_time_t(now);
-      std::tm *local_tm = std::localtime(&time_now);
-
-      std::stringstream ss;
-      ss << std::put_time(local_tm, "%Y%m%d-%H%M%S");
-      s = ss.str() + ".png";
-
+      s = currentTimeString() + ".png";
       pixbuf->save(s, "png", {"compression"}, // Вектор имен опций
                    {"9"} // Вектор значений опций (максимальное сжатие)
       );
@@ -782,7 +796,7 @@ std::string get_screenshot_winapi(bool save) {
 
   for (j = 0; j < N; j++) {
     for (i = 0; i < N; i++) {
-      if (DEBUG) {
+      if (debug) {
         // if (i == 0) {
         //   k = getPixelColor(x + i * STEP, y + j * STEP);
         //   l = EMPTY[j];

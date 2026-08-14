@@ -66,24 +66,6 @@ std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
           l++;
         }
       }
-      /*
-            l = 0;
-            for (k = 0; k < 2; k++) {
-              for (x = 0; x < N; x++) {
-                for (y = 0; y < N && (k ? fill[x][y] : fill[y][x]); y++)
-                  ;
-                if (y == N) {
-                  for (y = 0; y < N; y++) {
-                    if (k)
-                      after[x][y] = 0;
-                    else
-                      after[y][x] = 0;
-                  }
-                  l++;
-                }
-              }
-            }
-      */
       fi = 0;
       end = recent.empty() ? 0 : 1;
       for (auto &e : recent) {

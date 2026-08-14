@@ -63,6 +63,7 @@ const int InvalidValue = -1;
 
 void copy(const int source[N][N], int dest[N][N]);
 std::string possibleString(int possible, int o);
+std::string fillString(int possible, int o);
 int countPossible(const int field[N][N]);
 int countFill(const int field[N][N]);
 std::string join(const std::vector<std::string> &vs);
@@ -604,7 +605,7 @@ public:
     std::chrono::seconds sec{duration_sec};
 
     std::vector<std::string> vs = {
-        std::format("fill {}/{}={:.2f}%", f, N * N, f * 100. / N / N),
+        fillString(f, 1),
         possibleString(countPossible(field), 1),
         std::format("figures {}", total),
         std::format("squares {}", toString(squares)),
@@ -1155,6 +1156,11 @@ std::string possibleString(int i, const int o) {
   } else {
     return std::format("{} {:.2f}%", i, d);
   }
+}
+
+std::string fillString(int i, const int o) {
+  return std::format("fill{} {}/{}={:.2f}%", o == 0 ? "after" : "", i, N * N,
+                     i * 100. / N / N);
 }
 
 int countFill(const int field[N][N]) {

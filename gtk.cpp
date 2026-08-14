@@ -198,7 +198,7 @@ std::string bestString() {
       std::vector<std::string> vs = {
           std::format("estimate {}", toString(best.estimate, ' ', 2)),
           std::format("after {}", possibleString(vi[2], 2)),
-          std::format("fillafter {}", 64 - vi[1])};
+          fillString(N * N - vi[1], 0)};
       s += join(vs);
     }
     auto end = std::chrono::steady_clock::now();

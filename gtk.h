@@ -209,6 +209,7 @@ std::string to_string(const Figure &a, int o = 1);
 void init();
 std::string toString(int t, char separator = ' ', int digits = 3);
 std::string bestString();
+#define ADD_ICON
 
 class MyWindow : public Gtk::Window {
 public:
@@ -219,9 +220,9 @@ public:
     m_title = std::format("gtkmm {}.{}.{}", GTKMM_MAJOR_VERSION,
                           GTKMM_MINOR_VERSION, GTKMM_MICRO_VERSION);
     set_title(m_title);
-
+#ifdef ADD_ICON
     set_icon_name("app-icon");
-
+#endif
     // std::string css_data = "textview {"
     //                        "  font-family: 'Monospace', monospace;"
     //                        "  font-size: 16px;"
@@ -638,6 +639,7 @@ public:
 
 int main(int argc, char *argv[]) {
   auto app = Gtk::Application::create("com.example.myapp");
+#ifdef ADD_ICON
   app->signal_startup().connect([app]() {
     auto display = Gdk::Display::get_default();
     if (display) {
@@ -645,6 +647,8 @@ int main(int argc, char *argv[]) {
       icon_theme->add_resource_path("/com/example/myapp");
     }
   });
+#endif
+
   return app->make_window_and_run<MyWindow>(argc, argv);
 }
 

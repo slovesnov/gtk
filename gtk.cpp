@@ -90,15 +90,29 @@ std::vector<Info> possibleMoves(const Figure &f, const int field[N][N]) {
   return v;
 }
 
+std::set<uint32_t> set2;
+int skipc;
+
 int index3(int i, int j) { return j + (i <= j); }
 
-Info estimate(const VFigure &vf, const int field[N][N]) {
+Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
+              const uint16_t code, const int lines) {
   Info r, e;
   VFigure v2;
-  int i, j, k;
+  int j, k;
+  bool same;
   r.setInvalid();
   r.estimate = 0;
-  for (i = 0; i < vf.size(); i++) {
+  VInt vi = {0}, vi2;
+  if (vf.size() > 1) { // skip same figures
+    if (figureIndex[1] != figureIndex[0])
+      vi.push_back(1);
+    if (vf.size() > 2) {
+      if (figureIndex[2] != figureIndex[1] && figureIndex[2] != figureIndex[0])
+        vi.push_back(2);
+    }
+  }
+  for (auto &i : vi) {
     auto v = possibleMoves(vf[i], field);
 
     if (vf.size() == 1) {
@@ -114,8 +128,28 @@ Info estimate(const VFigure &vf, const int field[N][N]) {
 
     v2 = vf;
     v2.erase(v2.begin() + i);
+
+    vi2 = vi;
+    vi2.erase(vi2.begin() + i);
     for (auto &a : v) {
-      e = estimate(v2, a.field);
+      j = ((a.x << 3 | a.y) << 3) | figureIndex[i]; // 12bit
+
+      if (vf.size() == 2 && a.lines == 0 && lines == 0) {
+        // j,code
+        if (j < code) {
+          j = (j << 12) | code;
+        } else {
+          j = (code << 12) | j;
+        }
+        if (set2.contains(j)) {
+          skipc++;
+          continue;
+        } else {
+          set2.insert(j);
+        }
+      }
+
+      e = estimate(v2, a.field, vi, j, a.lines);
       if (e.isInvalid())
         continue;
 
@@ -141,11 +175,6 @@ Info estimate(const VFigure &vf, const int field[N][N]) {
   }
   return r;
 }
-
-struct Prev {
-  std::string code, out;
-  Info best;
-} previous[4];
 
 std::string bestString() {
   // printf("best\n");
@@ -173,11 +202,29 @@ std::string bestString() {
     auto &prev = previous[v.size()];
     if (s == prev.code) {
       best = prev.best;
-      return prev.out + "\nsame";
+      pWindow->m_out[2] = prev.out[2];
+      return prev.out[1] + "\nsame";
     }
     prev.code = s;
 
-    best = estimate(v, field);
+    figureIndex.clear();
+    set2.clear();
+    skipc = 0;
+    for (auto &a : figures) {
+      s = to_string(a);
+      auto it = std::find_if(std::begin(ALL_EXCEPT_DOT_STRING),
+                             std::end(ALL_EXCEPT_DOT_STRING),
+                             [&s](auto &e) { return e == s; });
+
+      figureIndex.push_back(
+          it == std::end(ALL_EXCEPT_DOT_STRING)
+              ? ALL_COUNT - 1
+              : std::distance(std::begin(ALL_EXCEPT_DOT_STRING), it));
+    }
+
+    best = estimate(v, field, figureIndex, 0, 0);
+    pWindow->m_out[2] = prev.out[2] =
+        std::format("size {} {}", set2.size(), skipc);
     if (best.isInvalid()) {
       s = "always game over\n";
     } else {
@@ -189,7 +236,7 @@ std::string bestString() {
         s += best.ss(i, v.size() == 1) + "\n";
       }
 
-      std::vector<int> vi; // estimate (64 - fieldc)   possibleAfter
+      VInt vi; // estimate (64 - fieldc)   possibleAfter
       j = best.estimate;
       for (i = 0; i < 3; i++, j /= 100) {
         vi.push_back(j % 100);
@@ -205,7 +252,7 @@ std::string bestString() {
     auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     s += std::format("time {}ms", elapsed.count());
-    prev.out = s;
+    prev.out[1] = s;
     prev.best = best;
     return s;
   } else {

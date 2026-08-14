@@ -21,13 +21,15 @@
 #include <set>
 #include <windows.h>
 
-using Figure = std::vector<std::vector<int>>;
+using VInt = std::vector<int>;
+using Figure = std::vector<VInt>;
 using VFigure = std::vector<Figure>;
 
 int debug = 0;
 int saveText = 0;
 const int TIMER_MILLISECONDS = 800;
 const int SAVE_TIMER_MILLISECONDS = 3000;
+const int NT = 3;
 const int N = 8;
 const std::string LOG = "log.txt";
 const std::vector<uint32_t> FC[] = {
@@ -53,12 +55,14 @@ const std::string SAVE_PNG = "save png";
 const std::string SAVE_TEXT = "add text to log";
 int gtotalWidth, field[N][N];
 Figure figures[3];
+VInt figureIndex;
 uint32_t *gp;
 std::chrono::steady_clock::time_point gameBegin;
 class MyWindow;
 MyWindow *pWindow;
 const int ALL_COUNT = 39;
 Figure ALL_EXCEPT_DOT[ALL_COUNT - 1];
+std::string ALL_EXCEPT_DOT_STRING[ALL_COUNT - 1];
 const int InvalidValue = -1;
 
 void copy(const int source[N][N], int dest[N][N]);
@@ -67,7 +71,8 @@ std::string fillString(int possible, int o);
 int countPossible(const int field[N][N]);
 int countFill(const int field[N][N]);
 std::string join(const std::vector<std::string> &vs);
-std::string currentTimeString();
+std::string dateTimeString(int o = 0);
+std::string timeString() { return dateTimeString(1); }
 
 struct Info {
   int x, y, x1, y1, x2, y2, estimate, lines, end, possibleAfter, field[N][N],
@@ -167,6 +172,11 @@ struct PointInfo {
   uint32_t color;
 };
 
+struct Prev {
+  std::string code, out[NT];
+  Info best;
+} previous[4];
+
 struct FigureStatistics {
   std::string show, mincode;
   std::vector<std::pair<std::string, int>> v;
@@ -232,10 +242,13 @@ public:
                            "  font-family: 'Times New Roman';"
                            "  font-size: 14px;"
                            "}";
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < NT; i++) {
       // width 320
-      if (!i)
+      if (i == 0)
         m_scrolled_window[i].set_size_request(200, 700);
+      else {
+        m_scrolled_window[i].set_vexpand(true);
+      }
       m_scrolled_window[i].set_child(m_text_view[i]);
       m_scrolled_window[i].set_policy(Gtk::PolicyType::AUTOMATIC,
                                       Gtk::PolicyType::AUTOMATIC);
@@ -246,7 +259,6 @@ public:
           css_provider, GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
       m_text_view[i].set_wrap_mode(Gtk::WrapMode::WORD);
     }
-    m_scrolled_window[1].set_vexpand(true);
 
     auto box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
     box->append(m_buttonSave);
@@ -254,6 +266,7 @@ public:
     box->append(m_buttonDebug);
     box->append(m_drawing_area);
     box->append(m_scrolled_window[1]);
+    box->append(m_scrolled_window[2]);
 
     auto box1 = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL);
     box1->append(m_scrolled_window[0]);
@@ -320,7 +333,7 @@ public:
           vf.push_back(f);
       }
 
-      std::vector<int> nf[N][N];
+      VInt nf[N][N];
       setColor(cr, FILL_COLOR_INDEX);
       for (y = 0; y < N; y++) {
         for (x = 0; x < N; x++) {
@@ -450,15 +463,15 @@ public:
     if (saveText) {
       std::ofstream file(LOG, std::ios::app);
       std::string m(10, '-');
-      file << "\n" << m << " " << currentTimeString() << " " << m << "\n";
-      for (i = 0; i < 2; i++) {
-        file << m_out[i];
+      file << "\n" << m << " " << dateTimeString() << " " << m << "\n";
+      for (auto &a : m_out) {
+        file << a;
       }
       file.close();
       saveText = 0;
       m_buttonSaveText.set_label(SAVE_TEXT);
     }
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < NT; i++) {
       m_text_view[i].get_buffer()->set_text(m_out[i]);
     }
     return true;
@@ -467,8 +480,8 @@ public:
   void gets() {
     int i, j, f = 0;
     std::string s1, sf[3], fields;
-    for (i = 0; i < 2; i++) {
-      m_out[i] = "";
+    for (auto &a : m_out) {
+      a = "";
     }
     auto s = get_screenshot_winapi();
     if (!s.empty()) {
@@ -629,9 +642,9 @@ public:
     }
 #endif
   }
-  Gtk::ScrolledWindow m_scrolled_window[2];
-  Gtk::TextView m_text_view[2];
-  std::string m_out[2];
+  Gtk::ScrolledWindow m_scrolled_window[NT];
+  Gtk::TextView m_text_view[NT];
+  std::string m_out[NT];
   Gtk::Button m_buttonSave, m_buttonSaveText, m_buttonDebug;
   Gtk::DrawingArea m_drawing_area;
   std::string m_prev, m_prevfields;
@@ -710,13 +723,14 @@ Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int crop_x, int crop_y, int crop_w,
   );
 }
 
-std::string currentTimeString() {
+// o=1 for debug outputs
+std::string dateTimeString(int o) {
   auto now = std::chrono::system_clock::now();
   std::time_t time_now = std::chrono::system_clock::to_time_t(now);
   std::tm *local_tm = std::localtime(&time_now);
 
   std::stringstream ss;
-  ss << std::put_time(local_tm, "%Y%m%d-%H%M%S");
+  ss << std::put_time(local_tm, o == 0 ? "%Y%m%d-%H%M%S" : "%H:%M:%S ");
   return ss.str();
 }
 
@@ -726,7 +740,7 @@ void savePng(int crop_x, int crop_y, int crop_w, int crop_h) {
   std::string s;
   if (pixbuf) {
     try {
-      s = currentTimeString() + ".png";
+      s = dateTimeString() + ".png";
       pixbuf->save(s, "png", {"compression"}, // Вектор имен опций
                    {"9"} // Вектор значений опций (максимальное сжатие)
       );
@@ -849,7 +863,7 @@ std::string get_screenshot_winapi(bool save) {
 
       y = pa.y;
       for (j = 0; j < 5; j++, y += STEPS) {
-        std::vector<int> q;
+        VInt q;
         x = b + (pa.x - b) % STEPS;
         for (i = 0; i < 5; i++, x += STEPS) {
           k = colorDifference(pa.color, getPixelColor(x, y));
@@ -879,8 +893,7 @@ std::string get_screenshot_winapi(bool save) {
       }
 
       for (auto &numbers : a) {
-        std::vector<int> sub_vector(numbers.begin() + x,
-                                    numbers.begin() + y + 1);
+        VInt sub_vector(numbers.begin() + x, numbers.begin() + y + 1);
         numbers = sub_vector;
       }
     }
@@ -929,7 +942,7 @@ Figure rotate(const Figure &matrix) {
   int cols = matrix[0].size();
 
   // Создаем новую матрицу с перевернутыми размерами (cols x rows)
-  Figure result(cols, std::vector<int>(rows));
+  Figure result(cols, VInt(rows));
 
   for (int i = 0; i < rows; ++i) {
     for (int j = 0; j < cols; ++j) {
@@ -943,12 +956,11 @@ Figure rotate(const Figure &matrix) {
 Figure reverseX(const Figure &matrix) {
   return matrix |
          std::views::transform([](auto &row) {
-           // Разворачиваем строку и сразу превращаем её в std::vector<int>
-           return row | std::views::reverse |
-                  std::ranges::to<std::vector<int>>();
+           // Разворачиваем строку и сразу превращаем её в VInt
+           return row | std::views::reverse | std::ranges::to<VInt>();
          })
          // Превращаем весь внешний результат в
-         // std::vector<std::vector<int>>
+         // std::vector<VInt>
          | std::ranges::to<std::vector>();
 }
 
@@ -970,7 +982,7 @@ std::string invert(const Figure &a, bool x, bool y) {
 
 Figure stringToFigure(std::string s) {
   Figure f;
-  std::vector<int> v;
+  VInt v;
   for (auto &a : s) {
     if (a == ' ') {
       f.push_back(v);
@@ -1044,7 +1056,9 @@ void init() {
           s = to_string(f);
           if (!set.contains(s)) {
             set.insert(s);
-            ALL_EXCEPT_DOT[k++] = f;
+            ALL_EXCEPT_DOT[k] = f;
+            ALL_EXCEPT_DOT_STRING[k] = s;
+            k++;
           }
         }
       }

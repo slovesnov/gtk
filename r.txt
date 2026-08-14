@@ -1,0 +1,5 @@
+windres E:/slovesno/gtk/app.rc -O coff -o E:/slovesno/gtk/app.res
+
+g++ -std=c++23 E:/slovesno/gtk/gtk.cpp E:/slovesno/gtk/app.res `pkg-config --cflags --libs gtkmm-4.0` -lgdi32
+clear && g++ -std=c++23 e:/slovesno/gtk.cpp `pkg-config gtkmm-4.0 --cflags --libs` -lgdi32 && ./a.exe
+

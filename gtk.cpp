@@ -95,15 +95,28 @@ int skipc2;
 
 int index3(int i, int j) { return j + (i <= j); }
 
+std::string uncode(int i) {
+  // (figureIndex[i] << 6) | (a.x << 3) | a.y; // 12bit
+  //int i = j;
+  int y = i & 7;
+  i >>= 3;
+  int x = i & 7;
+  i >>= 3;
+  return std::format(
+      "x{} y{} {}\n", x, y,
+      i == ALL_COUNT - 1
+          ? "dot"
+          : (i >= ALL_COUNT ? std::to_string(i) : ALL_EXCEPT_DOT_STRING[i]));
+}
+
 Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
               const int code, const int lines) {
   Info r, e;
   VFigure v2;
   int j, k;
-  bool same;
   r.setInvalid();
   r.estimate = 0;
-  VInt vi = {0}, vi2, vc;
+  VInt vi = {0}, vfi, vc;
   if (vf.size() > 1) { // skip same figures
     if (figureIndex[1] != figureIndex[0])
       vi.push_back(1);
@@ -129,21 +142,30 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
     v2 = vf;
     v2.erase(v2.begin() + i);
 
-    vi2 = vi;
-    vi2.erase(vi2.begin() + i);
+    vfi = figureIndex;
+    vfi.erase(vfi.begin() + i);
 
     for (auto &a : v) {
-      j = ((a.x << 3 | a.y) << 3) | figureIndex[i]; // 12bit
-
-      if (vf.size() == 2 && a.lines == 0 && lines == 0) {
-
-        vc = {code,j};
+      j = (figureIndex[i] << 6) | (a.x << 3) | a.y; // 12bit
+      int js = j;
+      // todo a.lines == 0 ???
+      if (vf.size() == 2 /* && a.lines == 0 */ && lines == 0) {
+        vc = {code, j};
         std::sort(vc.begin(), vc.end()); // asc
         j = 0;
         for (auto &a : vc) {
           j |= (j << 12) | a;
         }
         if (set2.contains(j)) {
+          // without 44 142, 
+          // with a.lines == 0 16 112
+          // if (a.lines) {
+          //   std::cout << timeString() << "#" << js << " " << code << "# "
+          //             << uncode(code) << " " << uncode(js) << " " << a.lines
+          //             << "\n";
+          //   std::cout << "#" << js << " " << code << "#\n";
+          // }
+
           skipc2++;
           continue;
         } else {
@@ -151,7 +173,7 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
         }
       }
 
-      e = estimate(v2, a.field, vi, j, a.lines);
+      e = estimate(v2, a.field, vfi, j, a.lines);
       if (e.isInvalid())
         continue;
 
@@ -226,8 +248,8 @@ std::string bestString() {
     }
 
     best = estimate(v, field, figureIndex, {0}, {0});
-    pWindow->m_out[2] = prev.out[2] = std::format(
-        "size {} {}", set2.size(), skipc2);
+    pWindow->m_out[2] = prev.out[2] =
+        std::format("size {} {}", set2.size(), skipc2);
     if (best.isInvalid()) {
       s = "always game over\n";
     } else {

@@ -26,7 +26,7 @@ using VFigure = std::vector<Figure>;
 
 int debug = 0;
 int saveText = 0;
-const int TIMER_MILLISECONDS = 1200;
+const int TIMER_MILLISECONDS = 800;
 const int SAVE_TIMER_MILLISECONDS = 3000;
 const int N = 8;
 const std::string LOG = "log.txt";
@@ -49,8 +49,8 @@ const int DRAW_AREA_SQUARE = 21;
 const uint32_t EMPTY[] = {0xff9c2469, 0xff952463, 0xff8e245c, 0xff872355,
                           0xff7f224d, 0xff782247, 0xff702240, 0xff692139};
 const int ADD_INDEX = 1;
-const std::string SAVE = "save";
-const std::string SAVE_TEXT = "save text";
+const std::string SAVE_PNG = "save png";
+const std::string SAVE_TEXT = "add text to log";
 int gtotalWidth, field[N][N];
 Figure figures[3];
 uint32_t *gp;
@@ -214,7 +214,7 @@ std::string bestString();
 class MyWindow : public Gtk::Window {
 public:
   MyWindow()
-      : m_buttonSave(SAVE), m_buttonSaveText(SAVE_TEXT), m_buttonDebug() {
+      : m_buttonSave(SAVE_PNG), m_buttonSaveText(SAVE_TEXT), m_buttonDebug() {
     int i;
     pWindow = this;
     m_title = std::format("gtkmm {}.{}.{}", GTKMM_MAJOR_VERSION,
@@ -437,7 +437,7 @@ public:
     m_buttonSave.set_label(s);
     Glib::signal_timeout().connect(
         [this]() -> bool {
-          m_buttonSave.set_label(SAVE);
+          m_buttonSave.set_label(SAVE_PNG);
           return false;
         },
         SAVE_TIMER_MILLISECONDS);
@@ -448,7 +448,8 @@ public:
     gets();
     if (saveText) {
       std::ofstream file(LOG, std::ios::app);
-      file << currentTimeString() << "\n";
+      std::string m(10, '-');
+      file << "\n" << m << " " << currentTimeString() << " " << m << "\n";
       for (i = 0; i < 2; i++) {
         file << m_out[i];
       }

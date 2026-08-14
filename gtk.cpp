@@ -189,14 +189,15 @@ std::string bestString() {
   }
 
   if (v.size() >= 1 && v.size() <= 3) {
-    bool hasDot = std::any_of(v.begin(), v.end(), [](const auto &a) {
-      return a.size() == 1 && a[0].size() == 1;
-    });
+    // bool hasDot = std::any_of(v.begin(), v.end(), [](const auto &a) {
+    //   return a.size() == 1 && a[0].size() == 1;
+    // });
 
-    if (hasDot && v.size() == 3 && countFill(field) < 10 /*15*/) {
-      best.setInvalid();
-      return "the field is too empty";
-    }
+    // if (hasDot && v.size() == 3 && countFill(field) < 10 ) {
+    //   best.setInvalid();
+    //   return "the field is too empty";
+    // }
+
     s = to_string(field) + to_string(v);
     // std::cout<<to_string(v)<<"\n";
     auto &prev = previous[v.size()];

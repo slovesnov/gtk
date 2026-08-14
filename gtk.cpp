@@ -91,17 +91,15 @@ std::vector<Info> possibleMoves(const Figure &f, const int field[N][N]) {
 }
 
 std::set<uint32_t> set2;
-std::set<uint64_t> set3;
-int skipc2, skipc3;
+int skipc2;
 
 int index3(int i, int j) { return j + (i <= j); }
 
 Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
-              const VInt &code, const VInt &lines) {
+              const int code, const int lines) {
   Info r, e;
   VFigure v2;
   int j, k;
-  uint64_t u;
   bool same;
   r.setInvalid();
   r.estimate = 0;
@@ -133,47 +131,27 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
 
     vi2 = vi;
     vi2.erase(vi2.begin() + i);
+
     for (auto &a : v) {
       j = ((a.x << 3 | a.y) << 3) | figureIndex[i]; // 12bit
 
-      if ((vf.size() == 2 || vf.size() == 1) && a.lines == 0) {
+      if (vf.size() == 2 && a.lines == 0 && lines == 0) {
 
-        bool is_all_zeros = std::all_of(lines.begin(), lines.end(),
-                                        [](int x) { return x == 0; });
-        if (is_all_zeros) {
-          vc = code;
-          vc.push_back(j);
-          std::sort(vc.begin(), vc.end()); // asc
-          u = 0;
-          for (auto &a : vc) {
-            u |= (u << 12) | a;
-          }
-          if (vf.size() == 2) {
-            if (set2.contains(u)) {
-              skipc2++;
-              continue;
-            } else {
-              set2.insert(u);
-            }
-          } else {
-            if (set3.contains(u)) {
-              skipc3++;
-              continue;
-            } else {
-              set3.insert(u);
-            }
-          }
+        vc = {code,j};
+        std::sort(vc.begin(), vc.end()); // asc
+        j = 0;
+        for (auto &a : vc) {
+          j |= (j << 12) | a;
+        }
+        if (set2.contains(j)) {
+          skipc2++;
+          continue;
+        } else {
+          set2.insert(j);
         }
       }
 
-      if (vf.size() == 3) {
-        e = estimate(v2, a.field, vi, {j}, {a.lines});
-      } else { // vf.size() == 2
-        auto l = lines;
-        l.push_back(a.lines);
-        // std::cout << vf.size() << " " << l.size() << " " << vi.size() << "\n";
-        e = estimate(v2, a.field, vi, vc, l);
-      }
+      e = estimate(v2, a.field, vi, j, a.lines);
       if (e.isInvalid())
         continue;
 
@@ -235,8 +213,6 @@ std::string bestString() {
     figureIndex.clear();
     set2.clear();
     skipc2 = 0;
-    set3.clear();
-    skipc3 = 0;
     for (auto &a : figures) {
       s = to_string(a);
       auto it = std::find_if(std::begin(ALL_EXCEPT_DOT_STRING),
@@ -251,7 +227,7 @@ std::string bestString() {
 
     best = estimate(v, field, figureIndex, {0}, {0});
     pWindow->m_out[2] = prev.out[2] = std::format(
-        "size {} {}\n{} {}", set2.size(), skipc2, set3.size(), skipc3);
+        "size {} {}", set2.size(), skipc2);
     if (best.isInvalid()) {
       s = "always game over\n";
     } else {

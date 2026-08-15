@@ -206,7 +206,6 @@ std::string bestString() {
     auto &prev = previous[v.size()];
     if (s == prev.code) {
       best = prev.best;
-      pWindow->m_out[2] = prev.out[2];
       return prev.out[1]; // + "\nsame";
     }
     prev.code = s;
@@ -227,8 +226,6 @@ std::string bestString() {
     }
 
     best = estimate(v, field, figureIndex, 0, 0);
-    pWindow->m_out[2] = prev.out[2] =
-        std::format("size {} {}", set2.size(), skipc2);
     if (best.isInvalid()) {
       s = "always game over\n";
     } else {
@@ -255,7 +252,9 @@ std::string bestString() {
     auto end = std::chrono::steady_clock::now();
     auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    s += std::format("time {}ms", elapsed.count());
+    s += std::format("time {}ms\n", elapsed.count());
+    s += std::format("size {} {}", set2.size(), skipc2);
+
     prev.out[1] = s;
     prev.best = best;
     return s;

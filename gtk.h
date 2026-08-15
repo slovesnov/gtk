@@ -29,7 +29,7 @@ int debug = 0;
 int saveText = 0;
 const int TIMER_MILLISECONDS = 800;
 const int SAVE_TIMER_MILLISECONDS = 3000;
-const int NT = 3;
+const int NT = 2;
 const int N = 8;
 const std::string LOG = "log.txt";
 const std::vector<uint32_t> FC[] = {
@@ -72,10 +72,14 @@ std::string join(const std::vector<std::string> &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 
+//#define USE_MASK
+
 struct HFigure {
   Figure figure;
   std::string string;
+  #ifdef USE_MASK
   uint64_t mask;
+  #endif
 } ALL_EXCEPT_DOT[ALL_COUNT - 1];
 
 struct Info {
@@ -1059,37 +1063,28 @@ void init() {
           s = to_string(f);
           if (!set.contains(s)) {
             set.insert(s);
-            ALL_EXCEPT_DOT[k++] = {f, s, 0};
+            ALL_EXCEPT_DOT[k++] = {f, s
+              #ifdef MASK
+              , 0
+              #endif
+            };
           }
         }
       }
     }
   }
 
-  k=0;
+  #ifdef USE_MASK
   for (auto &a : ALL_EXCEPT_DOT) {
     uint64_t &m = a.mask;
     m = 0;
     for (i = 0; i < ALL_COUNT - 1; i++) {
       if (subFigure(a.figure, ALL_EXCEPT_DOT[i].figure)) {
-        k++;
         m |= (1 << i);
       }
     }
   }
-  printf("%d",k);
-  // std::ofstream file(LOG, std::ios::out | std::ios::trunc);
-  // std::string m(10, '-');
-  // file << "\n" << m << " " << dateTimeString() << " " << m << "\n";
-  // for (i = 0; i < ALL_COUNT - 1; i++) {
-  //   for (j = i + 1; j < ALL_COUNT - 1; j++) {
-  //     file << std::format("{} {} {} {} {}\n", i, ALL_EXCEPT_DOT[i].string, j,
-  //                         ALL_EXCEPT_DOT[j].string,
-  //                         subFigure(ALL_EXCEPT_DOT[i].figure,
-  //                         ALL_EXCEPT_DOT[j].figure));
-  //   }
-  // }
-  // file.close();
+  #endif
 
   InvalidInfo.setInvalid();
   gameBegin = std::chrono::steady_clock::now();

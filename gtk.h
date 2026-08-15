@@ -61,8 +61,6 @@ std::chrono::steady_clock::time_point gameBegin;
 class MyWindow;
 MyWindow *pWindow;
 const int ALL_COUNT = 39;
-Figure ALL_EXCEPT_DOT[ALL_COUNT - 1];
-std::string ALL_EXCEPT_DOT_STRING[ALL_COUNT - 1];
 const int InvalidValue = -1;
 
 void copy(const int source[N][N], int dest[N][N]);
@@ -73,6 +71,12 @@ int countFill(const int field[N][N]);
 std::string join(const std::vector<std::string> &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
+
+struct HFigure{
+  Figure figure;
+  std::string string;
+  uint64_t mask;
+}ALL_EXCEPT_DOT[ALL_COUNT - 1];
 
 struct Info {
   int x, y, x1, y1, x2, y2, estimate, lines, end, possibleAfter, field[N][N],
@@ -1056,9 +1060,7 @@ void init() {
           s = to_string(f);
           if (!set.contains(s)) {
             set.insert(s);
-            ALL_EXCEPT_DOT[k] = f;
-            ALL_EXCEPT_DOT_STRING[k] = s;
-            k++;
+            ALL_EXCEPT_DOT[k++]={f,s,0};
           }
         }
       }
@@ -1217,21 +1219,11 @@ int countPossible(const int field[N][N]) {
     v5 = possibleH(field, 5);
     return ALL_COUNT - 2 + (h5 ? 1 : possibleH(field, 4) - 1) +
            (v5 ? 1 : possibleV(field, 4) - 1);
-    // if (v5 && h5) {
-    //   return ALL_COUNT;
-    // }
-    // if (v5 && !h5) {
-    //   return ALL_COUNT - 1 + possibleH(field, 4) - 1;
-    // }
-    // if (!v5 && h5) {
-    //   return ALL_COUNT - 1 + possibleV(field, 4) - 1;
-    // }
-    // return ALL_COUNT - 2 + possibleH(field, 4) - 1 + possibleV(field, 4) - 1;
   } else {
     i = 0, j = -1;
     for (auto &e : ALL_EXCEPT_DOT) {
       j++;
-      if (j && hasPossibleMoves(e, field)) {
+      if (j && hasPossibleMoves(e.figure, field)) {
         i++;
       }
     }

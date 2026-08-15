@@ -105,7 +105,7 @@ std::string uncode(int i) {
       "x{} y{} {}\n", x, y,
       i == ALL_COUNT - 1
           ? "dot"
-          : (i >= ALL_COUNT ? std::to_string(i) : ALL_EXCEPT_DOT_STRING[i]));
+          : (i >= ALL_COUNT ? std::to_string(i) : ALL_EXCEPT_DOT[i].string));
 }
 
 Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
@@ -199,6 +199,11 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
   return r;
 }
 
+//a in b
+bool subFigure(Figure &a, Figure&b){
+  return true;
+}
+
 std::string bestString() {
   VFigure v;
   std::string s;
@@ -226,17 +231,17 @@ std::string bestString() {
     skipc2 = 0;
     for (auto &a : figures) {
       s = to_string(a);
-      auto it = std::find_if(std::begin(ALL_EXCEPT_DOT_STRING),
-                             std::end(ALL_EXCEPT_DOT_STRING),
-                             [&s](auto &e) { return e == s; });
+      auto it = std::find_if(std::begin(ALL_EXCEPT_DOT),
+                             std::end(ALL_EXCEPT_DOT),
+                             [&s](auto &e) { return e.string == s; });
 
       figureIndex.push_back(
-          it == std::end(ALL_EXCEPT_DOT_STRING)
+          it == std::end(ALL_EXCEPT_DOT)
               ? ALL_COUNT - 1
-              : std::distance(std::begin(ALL_EXCEPT_DOT_STRING), it));
+              : std::distance(std::begin(ALL_EXCEPT_DOT), it));
     }
 
-    best = estimate(v, field, figureIndex, {0}, {0});
+    best = estimate(v, field, figureIndex, 0, 0);
     pWindow->m_out[2] = prev.out[2] =
         std::format("size {} {}", set2.size(), skipc2);
     if (best.isInvalid()) {

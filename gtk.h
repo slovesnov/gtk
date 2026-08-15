@@ -37,10 +37,22 @@ const std::string LOG = "log.txt";
 
 // if fexed_field is not empty it's debug mode
 std::string fixed_field ="";
-    // R"(00000000
-    // 11101001 11100001 10000001 11010000 11100000 00110000 10100011 111 111 111 -
-    // 1 -
-    // 111 111 111 )";
+/*
+R"(00010000
+01011110
+00011111
+00000000
+11100011
+11010111
+11010111
+10010110
+10 11 01-111 111 111-111 111 111)";
+
+    R"(00000000
+    11101001 11100001 10000001 11010000 11100000 00110000 10100011 111 111 111 -
+    1 -
+    111 111 111 )";
+*/
 
 const std::unordered_map<std::string, std::string> MAP = {
     {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
@@ -371,7 +383,7 @@ public:
               if (f[y][x]) {
                 auto &v = nf[j + y][i + x];
                 v.push_back(n);
-                if (field[j + y][i + x]) {
+                if (field[j + y][i + x] && !std::ranges::contains(v, BG_COLOR)) {
                   v.push_back(BG_COLOR);
                 }
               }

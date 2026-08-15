@@ -1144,18 +1144,99 @@ bool hasPossibleMoves(const Figure &f, const int field[N][N]) {
   return false;
 }
 
-int countPossible(const int field[N][N]) {
-  int i = 0, j = 0;
-  for (auto &e : ALL_EXCEPT_DOT) {
-    if (hasPossibleMoves(e, field)) {
-      i++;
-    }
-    j++;
-    if (j == 3 && i == 3) {
-      return ALL_COUNT;
+bool possibleSquare3(int i, int j, const int field[N][N]) {
+  int x, y;
+  for (x = 0; x < 3; x++) {
+    for (y = 0; y < 3; y++) {
+      if (field[y + j][x + i])
+        return false;
     }
   }
-  return i + 1;
+  return true;
+}
+
+bool possibleV(int i, int j, const int field[N][N], int n) {
+  int y;
+  for (y = 0; y < n; y++) {
+    if (field[y + j][i])
+      return false;
+  }
+  return true;
+}
+
+bool possibleH(int i, int j, const int field[N][N], int n) {
+  int x;
+  for (x = 0; x < n; x++) {
+    if (field[j][x + i])
+      return false;
+  }
+  return true;
+}
+
+bool possibleSquare3(const int field[N][N]) {
+  int i, j;
+  for (j = 0; j <= N - 3; j++) {
+    for (i = 0; i <= N - 3; i++) {
+      if (possibleSquare3(i, j,field)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool possibleV(const int field[N][N], int n) {
+  int i, j;
+  for (j = 0; j <= N - 5; j++) {
+    for (i = 0; i <= N - 1; i++) {
+      if (possibleV(i, j, field, n)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool possibleH(const int field[N][N], int n) {
+  int i, j;
+  for (j = 0; j <= N - 1; j++) {
+    for (i = 0; i <= N - 5; i++) {
+      if (possibleH(i, j, field, n)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+int countPossible(const int field[N][N]) {
+  int i, j;
+  bool square3 = possibleSquare3(field), h5, v5;
+  if (square3) {
+    h5 = possibleV(field, 5);
+    v5 = possibleH(field, 5);
+    return ALL_COUNT - 2 + (h5 ? 1 : possibleH(field, 4) - 1) +
+           (v5 ? 1 : possibleV(field, 4) - 1);
+    // if (v5 && h5) {
+    //   return ALL_COUNT;
+    // }
+    // if (v5 && !h5) {
+    //   return ALL_COUNT - 1 + possibleH(field, 4) - 1;
+    // }
+    // if (!v5 && h5) {
+    //   return ALL_COUNT - 1 + possibleV(field, 4) - 1;
+    // }
+    // return ALL_COUNT - 2 + possibleH(field, 4) - 1 + possibleV(field, 4) - 1;
+  } else {
+    i = 0, j = -1;
+    for (auto &e : ALL_EXCEPT_DOT) {
+      j++;
+      if (j && hasPossibleMoves(e, field)) {
+        i++;
+      }
+    }
+    return i + 1;
+  }
 }
 
 std::string possibleString(int i, const int o) {

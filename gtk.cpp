@@ -97,7 +97,6 @@ int index3(int i, int j) { return j + (i <= j); }
 
 std::string uncode(int i) {
   // (figureIndex[i] << 6) | (a.x << 3) | a.y; // 12bit
-  //int i = j;
   int y = i & 7;
   i >>= 3;
   int x = i & 7;
@@ -201,7 +200,6 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
 }
 
 std::string bestString() {
-  // printf("best\n");
   VFigure v;
   std::string s;
   int i, j;
@@ -213,22 +211,13 @@ std::string bestString() {
   }
 
   if (v.size() >= 1 && v.size() <= 3) {
-    // bool hasDot = std::any_of(v.begin(), v.end(), [](const auto &a) {
-    //   return a.size() == 1 && a[0].size() == 1;
-    // });
-
-    // if (hasDot && v.size() == 3 && countFill(field) < 10 ) {
-    //   best.setInvalid();
-    //   return "the field is too empty";
-    // }
-
     s = to_string(field) + to_string(v);
     // std::cout<<to_string(v)<<"\n";
     auto &prev = previous[v.size()];
     if (s == prev.code) {
       best = prev.best;
       pWindow->m_out[2] = prev.out[2];
-      return prev.out[1] + "\nsame";
+      return prev.out[1];// + "\nsame";
     }
     prev.code = s;
 
@@ -268,7 +257,7 @@ std::string bestString() {
       }
 
       std::vector<std::string> vs = {
-          std::format("estimate {}", toString(best.estimate, ' ', 2)),
+          //std::format("estimate {}", toString(best.estimate, ' ', 2)),
           std::format("after {}", possibleString(vi[2], 2)),
           fillString(N * N - vi[1], 0)};
       s += join(vs);

@@ -1,3 +1,4 @@
+#include "aslov.h"
 #include <algorithm>
 #include <chrono>
 #include <format>
@@ -33,6 +34,13 @@ const int SAVE_TIMER_MILLISECONDS = 3000;
 const int NT = 2;
 const int N = 8;
 const std::string LOG = "log.txt";
+
+// if fexed_field is not empty it's debug mode
+std::string fixed_field =
+    R"(00000000
+    11101001 11100001 10000001 11010000 11100000 00110000 10100011 111 111 111 -
+    1 -
+    111 111 111 )";
 
 const std::unordered_map<std::string, std::string> MAP = {
     {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
@@ -79,6 +87,7 @@ std::string join(const std::vector<std::string> &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 std::string possibleStatString();
+Figure stringToFigure(std::string s);
 // #define USE_MASK
 
 struct HFigure {
@@ -232,7 +241,6 @@ std::string to_string(const int field[N][N]);
 std::string to_string(const VFigure &vf);
 std::string to_string(const Figure &a, int o = 1);
 void init();
-std::string toString(int t, char separator = ' ', int digits = 3);
 std::string bestString();
 void newGame();
 
@@ -301,21 +309,15 @@ public:
     });
 
     m_buttonDebug.signal_clicked().connect([this]() {
-      //       auto dialog =
-      //           new Gtk::FontChooserDialog("Выберите шрифт для сетки",
-      //           *this);
-      //       dialog->set_modal(true);
-      //       dialog->show();
-
       debug = !debug;
       setDebugButtonText();
     });
 
-    Glib::signal_timeout().connect(sigc::mem_fun(*this, &MyWindow::timer),
-                                   TIMER_MILLISECONDS);
-
     setDebugButtonText();
     init();
+
+    Glib::signal_timeout().connect(sigc::mem_fun(*this, &MyWindow::timer),
+                                   TIMER_MILLISECONDS);
   }
 
   void setColor(const Cairo::RefPtr<Cairo::Context> &cr, int i) {
@@ -472,32 +474,75 @@ public:
   }
 
   bool timer() {
-    int i;
-    gets();
-    if (saveText) {
-      //  std::ofstream file(LOG, std::ios::out | std::ios::trunc); //w+
-      std::ofstream file(LOG, std::ios::app);
-      std::string m(10, '-');
-      file << "\n" << m << " " << dateTimeString() << " " << m << "\n";
-      VFigure v;
-      for (auto &a : figures) {
-        if (!a.empty()) {
-          v.push_back(a);
+    int i, j;
+    if (fixed_field.empty()) {
+      gets();
+      if (saveText) {
+        //  std::ofstream file(LOG, std::ios::out | std::ios::trunc); //w+
+        std::ofstream file(LOG, std::ios::app);
+        std::string m(10, '-');
+        file << "\n" << m << " " << dateTimeString() << " " << m << "\n";
+        VFigure v;
+        for (auto &a : figures) {
+          if (!a.empty()) {
+            v.push_back(a);
+          }
+        }
+        file << to_string(field) + to_string(v) << "\n";
+
+        for (auto &a : m_out) {
+          file << a;
+        }
+        file.close();
+        saveText = 0;
+        m_buttonSaveText.set_label(SAVE_TEXT);
+      }
+    } else {
+      const char *p = fixed_field.c_str();
+      for (j = 0; j < N; j++) {
+        for (i = 0; i < N; i++) {
+          while (!strchr("01", *p))
+            p++;
+
+          field[j][i] = *p - '0';
+          p++;
         }
       }
-      file << to_string(field) + to_string(v) << "\n";
 
-      for (auto &a : m_out) {
-        file << a;
+      // std::cout << to_string(field);
+
+      auto v = split(p, std::string(1, '-'));
+      for (auto &a : v) {
+        a = trim(a);
       }
-      file.close();
-      saveText = 0;
-      m_buttonSaveText.set_label(SAVE_TEXT);
+
+      if (v.size() > 3) {
+        std::cout << "error" << __LINE__;
+        return false;
+      }
+
+      i = 0;
+      for (auto &a : v) {
+        figures[i] = stringToFigure(a);
+        // std::cout << "#" << to_string(figures[i]) << "#\n";
+        i++;
+      }
+
+      std::string s;
+      uint32_t u[] = {0xff59ed9e, 0xffffb945, 0xff45dcf7};
+      i = 0;
+      for (auto &a : figure_color) {
+        a = u[i++];
+      }
+      s = bestString();
+      m_out[1] = s;
+      std::cout << s << "\n";
+      m_drawing_area.queue_draw();
     }
     for (i = 0; i < NT; i++) {
       m_text_view[i].get_buffer()->set_text(m_out[i]);
     }
-    return true;
+    return fixed_field.empty();
   }
 
   void gets() {
@@ -590,14 +635,7 @@ public:
       }
       if (s1 != m_prev && fields != m_prevfields) {
 
-        if (!best.isInvalid()) {
-          VInt vi; // estimate (64 - fieldc)   possibleAfter
-          j = best.estimate;
-          for (i = 0; i < 3; i++, j /= 100) {
-            vi.push_back(j % 100);
-          }
-          possibleStat[vi[2]]++;
-        }
+        possibleStat[countPossible(field)]++;
 
         m_prev = s1;
         m_prevfields = fields;
@@ -1137,34 +1175,6 @@ std::string code(const Figure &a) {
   return min;
 }
 
-std::string toString(int t, char separator, int digits) {
-  // std::fixed to prevents scientific notation t=1234567.890123 b=1.23457e
-  // +06
-  std::stringstream c;
-  c << std::fixed << t;
-  std::string s, e, b = c.str();
-  std::string::size_type p, p1;
-  p = b.find('.');
-  if (p != std::string::npos) {
-    for (p1 = b.length() - 1; p1 > p && b[p1] == '0'; p1--)
-      ;            //"3.875000"->"3.875"
-    if (p != p1) { //"1.000" -> "1"
-      e = b.substr(p, p1 - p + 1);
-    }
-    b = b.substr(0, p);
-  }
-  bool negative = std::is_signed<int>::value && t < 0;
-  unsigned i = b.length() - 1;
-  for (char a : b) {
-    s += a;
-    if (i % digits == 0 && i != 0 && (!negative || i != b.length() - 1)) {
-      s += separator;
-    }
-    i--;
-  }
-  return s + e;
-}
-
 std::string to_string(const int field[N][N]) {
   std::string s;
   int i, j;
@@ -1285,11 +1295,12 @@ std::string possibleString(int i, const int o) {
     return "";
   }
   auto d = (1 - std::pow(1 - double(i) / ALL_COUNT, 3)) * 100;
-  if (o == 0) {
+  if (o == 0)
     return std::format(" {} {:.0f}%", i, d);
-  } else {
+  else if (o == 1)
     return std::format("possible {} {:.2f}%", i, d);
-  }
+  else
+    return std::format("{} {:.1f}%", i, d);
 }
 
 std::string fillString(int i) {
@@ -1333,15 +1344,21 @@ std::string possibleStatString() {
     }
     i++;
   }
-  std::sort(v.begin(), v.end(),
-            [](auto &a, auto &b) { return a.second > b.second; });
+  std::sort(v.begin(), v.end(), [](auto &a, auto &b) {
+    return a.second > b.second || a.second == b.second && a.first < b.first;
+  });
 
   int sum = std::accumulate(v.begin(), v.end(), 0,
                             [](int acc, auto &e) { return acc + e.second; });
 
+  double total = 0;
   for (auto &a : v) {
-    s += std::format("{} {} {:.1f}%\n", a.first, a.second,
+    s += std::format("{} - {:.1f}%\n", possibleString(a.first, 2),
                      a.second * 100. / sum);
+
+    auto d = std::pow(1 - double(a.first) / ALL_COUNT, 3);
+    total += d * a.second / sum;
   }
+  s += std::format("total bad {:.1f}%% sum{}\n", total * 100, sum);
   return s;
 }

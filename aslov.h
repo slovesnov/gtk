@@ -1,5 +1,6 @@
 #include<vector>
 #include<string>
+#include <sstream>
 
 using VString=std::vector<std::string>;
 

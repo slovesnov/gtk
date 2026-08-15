@@ -109,7 +109,7 @@ std::string uncode(int i) {
 }
 
 Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
-              const int code, const int lines) {
+              const int code, const int lines, bool show = false) {
   Info r, e;
   VFigure v2;
   int j, k;
@@ -124,6 +124,11 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
         vi.push_back(2);
     }
   }
+
+  // if (vf.size() == 3) {
+  //   std::cout << std::format("{} {}\n", set2.size(), __LINE__);
+  // }
+
   for (auto &i : vi) {
     auto v = possibleMoves(vf[i], field);
 
@@ -144,26 +149,84 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
     vfi = figureIndex;
     vfi.erase(vfi.begin() + i);
 
+    if (show) {
+      std::cout << std::format("{} {}\n", v.size(), __LINE__);
+    }
+
     for (auto &a : v) {
+      // if(vf.size()==3){
+      //        std::cout <<std::format("xy{}{} {}
+      //        {}\n",a.x,a.y,to_string(v2),to_string(a.field) );
+      // }
       j = (figureIndex[i] << 6) | (a.x << 3) | a.y; // 12bit
-      int js = j;
-      // todo a.lines == 0 ???
+      int js = j;                                   // todo remove
+      //  a.lines == 0 - need
+      // if (vf.size() == 2 && a.lines && lines == 0) {
+      //       std::cout <<std::format("{} {}, {} {}, {}
+      //       {}\n",to_string(a.field), a.lines,code,j,uncode(code) ,
+      //       uncode(js));
+      // }
+      bool b = show && (a.x == 5 && a.y == 4 || a.x == 7 && a.y == 0);
+      if (b) {
+        std::cout << std::format("xy{} {} {}\n", a.x, a.y, __LINE__);
+      }
       if (vf.size() == 2 /* && a.lines == 0 */ && lines == 0) {
         vc = {code, j};
         std::sort(vc.begin(), vc.end()); // asc
+
         j = 0;
         for (auto &a : vc) {
           j |= (j << 12) | a;
         }
+
+          if (j == 182716) {
+            std::cout << std::format("####x{} y{} {} {} code{} {} js{} {} {}\n", a.x, a.y,
+                                     to_string(v2),
+                                     vf.size(),code,uncode(code),js,uncode(js), __LINE__);
+            // std::cout << std::format("####x{} y{} {} {}, {} code{} js{} {}\n", a.x, a.y,
+            //                          to_string(v2), to_string(a.field),
+            //                          vf.size(),uncode(code),uncode(js), __LINE__);
+          }
+
         if (set2.contains(j)) {
+          if (b || j == 182716) {
+            std::cout << std::format("skip{} {} {} {}\n", code, js, j,
+                                     __LINE__);
+          }
           // skipc2++;
           continue;
         } else {
+          if (b) {
+            std::cout << std::format("notskip{}\n", __LINE__);
+          }
+          if (j == 182716) {
+            std::cout << std::format("insert x{} y{} {}  {} code{} {} js{} {} {}\n", a.x, a.y,
+                                     to_string(v2),
+                                     vf.size(),code,uncode(code),js,uncode(js), __LINE__);
+            // std::cout << std::format("insert x{} y{} {} {}, {} code{} js{} {}\n", a.x, a.y,
+            //                          to_string(v2), to_string(a.field),
+            //                          vf.size(),uncode(code),uncode(js), __LINE__);
+          }
           set2.insert(j);
         }
       }
+      bool show = false;
+      bool b3 = vf.size() == 3 &&
+                (a.x == 5 && a.y == 4 && to_string(vf[i]) == "111 111 111" ||
+                 a.x == 7 && a.y == 0 && to_string(vf[i]) == "1");
+      if (b3) {
+        show = 0;//true;
+        // std::cout << std::format("x{} y{} {} {}, {} {}\n", a.x, a.y,
+        //                          to_string(v2), to_string(a.field), vf.size(),
+        //                          __LINE__);
+      }
+      e = estimate(v2, a.field, vfi, j, a.lines, show);
 
-      e = estimate(v2, a.field, vfi, j, a.lines);
+      if (b || b3) {
+        // std::cout << std::format("x{} y{} {} {} {}, {} {}\n", a.x, a.y,
+        //                          to_string(v2), e.isInvalid(),
+        //                          to_string(a.field), vf.size(), __LINE__);
+      }
       if (e.isInvalid())
         continue;
 
@@ -242,8 +305,6 @@ std::string bestString() {
       for (i = 0; i < 3; i++, j /= 100) {
         vi.push_back(j % 100);
       }
-      // if (v.size() == 3)
-      //   possibleStat[vi[2]]++;
 
       std::vector<std::string> vs = {
           // std::format("estimate {}", toString(best.estimate, ' ', 2)),

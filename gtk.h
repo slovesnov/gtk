@@ -36,11 +36,11 @@ const int N = 8;
 const std::string LOG = "log.txt";
 
 // if fexed_field is not empty it's debug mode
-std::string fixed_field =
-    R"(00000000
-    11101001 11100001 10000001 11010000 11100000 00110000 10100011 111 111 111 -
-    1 -
-    111 111 111 )";
+std::string fixed_field ="";
+    // R"(00000000
+    // 11101001 11100001 10000001 11010000 11100000 00110000 10100011 111 111 111 -
+    // 1 -
+    // 111 111 111 )";
 
 const std::unordered_map<std::string, std::string> MAP = {
     {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
@@ -1359,6 +1359,6 @@ std::string possibleStatString() {
     auto d = std::pow(1 - double(a.first) / ALL_COUNT, 3);
     total += d * a.second / sum;
   }
-  s += std::format("total bad {:.1f}%% sum{}\n", total * 100, sum);
+  s += std::format("total bad {:.1f}% sum{}\n", total * 100, sum);
   return s;
 }

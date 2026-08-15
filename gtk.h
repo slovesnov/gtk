@@ -50,7 +50,7 @@ const std::vector<uint32_t> FC[] = {
     {0xffab2578}, {0xff59ed9e, 0xff45dcf7, 0xff7676ff, 0xffffb945, 0xfff65ae9}};
 const uint32_t EMPTY[] = {0xff9c2469, 0xff952463, 0xff8e245c, 0xff872355,
                           0xff7f224d, 0xff782247, 0xff702240, 0xff692139};
-uint32_t BG_COLOR = 0xcc8000;
+uint32_t BG_COLOR = 0xE6D8AD;//0xcc8000;
 uint32_t figure_color[3];
 
 const int ADD_INDEX = 1;

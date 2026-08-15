@@ -206,7 +206,7 @@ std::string bestString() {
     auto &prev = previous[v.size()];
     if (s == prev.code) {
       best = prev.best;
-      return prev.out[1]; // + "\nsame";
+      return prev.out[1]; //+ "\nsame";
     }
     prev.code = s;
 
@@ -242,6 +242,8 @@ std::string bestString() {
       for (i = 0; i < 3; i++, j /= 100) {
         vi.push_back(j % 100);
       }
+      // if (v.size() == 3)
+      //   possibleStat[vi[2]]++;
 
       std::vector<std::string> vs = {
           // std::format("estimate {}", toString(best.estimate, ' ', 2)),

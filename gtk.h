@@ -18,6 +18,7 @@
 #include <gtkmm/window.h>
 #include <iomanip>
 #include <iostream>
+#include <numeric>
 #include <set>
 #include <windows.h>
 
@@ -66,6 +67,8 @@ MyWindow *pWindow;
 const int ALL_COUNT = 39;
 const int InvalidValue = -1;
 std::string hs;
+int possibleStat[ALL_COUNT + 1];
+bool startFromEmptyField = 0;
 
 void copy(const int source[N][N], int dest[N][N]);
 std::string possibleString(int possible, int o);
@@ -75,7 +78,7 @@ int countFill(const int field[N][N]);
 std::string join(const std::vector<std::string> &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
-
+std::string possibleStatString();
 // #define USE_MASK
 
 struct HFigure {
@@ -217,9 +220,6 @@ struct FigureStatistics {
     return std::format("{} {:{}} {:.1f}%{}\n", show, total,
                        static_cast<int>(std::log10(_max)) + 1,
                        total * 100. / _total, s);
-    // return std::format("{:7} {:{}} {:4.1f}%{}\n", show, total,
-    //                    static_cast<int>(std::log10(_max)) + 1,
-    //                    total * 100. / _total, s);
   }
 };
 
@@ -234,6 +234,7 @@ std::string to_string(const Figure &a, int o = 1);
 void init();
 std::string toString(int t, char separator = ' ', int digits = 3);
 std::string bestString();
+void newGame();
 
 class MyWindow : public Gtk::Window {
 public:
@@ -559,13 +560,11 @@ public:
         for (auto &e : v) {
           s += e.to_string();
         }
-        // s += v.empty() ? "" : "\n";
         s += "\n";
       }
       i++;
     }
     fields = "";
-    // std::vector<std::string> vs;
     f = 0;
     for (j = 0; j < N; j++) {
       s1 = "";
@@ -574,7 +573,6 @@ public:
           f++;
         s1 += std::to_string(field[j][i]);
       }
-      // vs.push_back(s1);
       fields += s1 + "\n";
     }
 
@@ -587,9 +585,20 @@ public:
         s1 += e + '#';
       }
       if (f == 0) {
-        gameBegin = std::chrono::steady_clock::now();
+        newGame();
+        startFromEmptyField = 1;
       }
       if (s1 != m_prev && fields != m_prevfields) {
+
+        if (!best.isInvalid()) {
+          VInt vi; // estimate (64 - fieldc)   possibleAfter
+          j = best.estimate;
+          for (i = 0; i < 3; i++, j /= 100) {
+            vi.push_back(j % 100);
+          }
+          possibleStat[vi[2]]++;
+        }
+
         m_prev = s1;
         m_prevfields = fields;
         if (f == 0) {
@@ -645,9 +654,10 @@ public:
         std::format("map {}/{}", m_vec.size(), 5 + 2 + MAP.size()),
         fillString(f),
         possibleString(countPossible(field), 1),
-        std::format("time {:%T}", sec)};
+        std::format("time {:%T}{}", sec, startFromEmptyField ? "" : "*")};
     s += join(vs);
 
+    s += possibleStatString();
     m_out[0] = s;
     m_out[1] = bestString();
   }
@@ -1107,7 +1117,7 @@ void init() {
 #endif
 
   InvalidInfo.setInvalid();
-  gameBegin = std::chrono::steady_clock::now();
+  newGame();
 }
 
 std::string code(const Figure &a) {
@@ -1301,6 +1311,37 @@ std::string join(const std::vector<std::string> &vs) {
   std::string s;
   for (auto &a : vs) {
     s += a + '\n';
+  }
+  return s;
+}
+
+void newGame() {
+  for (auto &a : possibleStat) {
+    a = 0;
+  }
+  gameBegin = std::chrono::steady_clock::now();
+  best.setInvalid();
+}
+
+std::string possibleStatString() {
+  int i = 0;
+  std::string s;
+  std::vector<std::pair<int, int>> v;
+  for (auto &a : possibleStat) {
+    if (a) {
+      v.push_back({i, a});
+    }
+    i++;
+  }
+  std::sort(v.begin(), v.end(),
+            [](auto &a, auto &b) { return a.second > b.second; });
+
+  int sum = std::accumulate(v.begin(), v.end(), 0,
+                            [](int acc, auto &e) { return acc + e.second; });
+
+  for (auto &a : v) {
+    s += std::format("{} {} {:.1f}%\n", a.first, a.second,
+                     a.second * 100. / sum);
   }
   return s;
 }

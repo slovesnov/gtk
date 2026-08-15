@@ -29,14 +29,14 @@ using VFigure = std::vector<Figure>;
 
 int debug = 0;
 int saveText = 0;
-const int TIMER_MILLISECONDS = 800;
+const int TIMER_MILLISECONDS = 500;//800
 const int SAVE_TIMER_MILLISECONDS = 3000;
 const int NT = 2;
 const int N = 8;
 const std::string LOG = "log.txt";
 
-// if fexed_field is not empty it's debug mode
-std::string fixed_field ="";
+// if fixed_field is not empty it's debug mode
+std::string fixed_field = "";
 /*
 R"(00010000
 01011110
@@ -71,6 +71,9 @@ const std::vector<uint32_t> FC[] = {
     {0xffab2578}, {0xff59ed9e, 0xff45dcf7, 0xff7676ff, 0xffffb945, 0xfff65ae9}};
 const uint32_t EMPTY[] = {0xff9c2469, 0xff952463, 0xff8e245c, 0xff872355,
                           0xff7f224d, 0xff782247, 0xff702240, 0xff692139};
+const uint32_t POSSIBLE_COLOR[] = {0xff59ed9e, 0xffffb945, 0xff45dcf7,
+                                   0xff45dcf7, 0xff7676ff, 0xfff65ae9};
+
 uint32_t BG_COLOR = 0xE6D8AD;
 uint32_t figure_color[3];
 
@@ -383,7 +386,8 @@ public:
               if (f[y][x]) {
                 auto &v = nf[j + y][i + x];
                 v.push_back(n);
-                if (field[j + y][i + x] && !std::ranges::contains(v, BG_COLOR)) {
+                if (field[j + y][i + x] &&
+                    !std::ranges::contains(v, BG_COLOR)) {
                   v.push_back(BG_COLOR);
                 }
               }
@@ -391,7 +395,6 @@ public:
           }
         }
       }
-      // hs = std::format("{} {} {}\n", best.n[0], best.n[1], best.n[2]);
 
       for (y = 0; y < N; y++) {
         for (x = 0; x < N; x++) {
@@ -876,7 +879,7 @@ std::string get_screenshot_winapi(bool save) {
   gtotalWidth = width;
 
   PointInfo pa;
-  int x, y, i, j, k, l;
+  int x, y, i, j, k, l, b, c;
   pa = getBase(0, width, 0, height, 0);
 
   x = pa.x;
@@ -889,33 +892,27 @@ std::string get_screenshot_winapi(bool save) {
   if (x + STEP * (N - 1) >= width || y + STEP * (N - 1) >= height)
     return std::format("bounds error {}", __LINE__);
 
-  /*   const uint32_t POSSIBLE_COLOR[] = {
-        0xff59ed9e, 0xffffb945, 0xff45dcf7, 0xff45dcf7,
-        0xff7676ff,
-        0xfff65ae9,//purple
-        0xff75e3a8 , // green+
-        0xff8fbc96,//blue-
-    };
-    hs = "";
-   */
+  l = 0;
   for (j = 0; j < N; j++) {
     for (i = 0; i < N; i++) {
-      // uint32_t k = getPixelColor(x + i * STEP, y + j * STEP);
-      // l = EMPTY[j];
-      // if (k != l) {
-      //   if (std::find(std::begin(POSSIBLE_COLOR), std::end(POSSIBLE_COLOR),
-      //                 k) == std::end(POSSIBLE_COLOR)) {
-      //     hs += std::format("{}{} {} 0x{:x}\n", i, j, toABGR(k), k &
-      //     0xffffff);
-      //   }
-      // }
-      field[j][i] = getPixelColor(x + i * STEP, y + j * STEP) != EMPTY[j];
+      uint32_t k = getPixelColor(x + i * STEP, y + j * STEP);
+      field[j][i] = b = k != EMPTY[j];
+      if (b) {
+        if (std::find(std::begin(POSSIBLE_COLOR), std::end(POSSIBLE_COLOR),
+                      k) == std::end(POSSIBLE_COLOR)) {
+          l++;
+        }
+      }
     }
+  }
+  if (l > 7) {
+    return "bad field";
   }
 
   x += DX1;
   y += DY1;
-  int b = x, c = y;
+  b = x;
+  c = y;
   if (b + 2 * SX + SMALL_SQUARE_SIZE >= width ||
       c + SMALL_SQUARE_SIZE >= height)
     return std::format("bounds error {}", __LINE__);
@@ -1365,7 +1362,7 @@ std::string possibleStatString() {
 
   double total = 0;
   for (auto &a : v) {
-    s += std::format("{} - {:.1f}%\n", possibleString(a.first, 2),
+    s += std::format("{} - {} {:.1f}%\n", possibleString(a.first, 2),a.second,
                      a.second * 100. / sum);
 
     auto d = std::pow(1 - double(a.first) / ALL_COUNT, 3);

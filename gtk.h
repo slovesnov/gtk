@@ -50,7 +50,7 @@ const std::vector<uint32_t> FC[] = {
     {0xffab2578}, {0xff59ed9e, 0xff45dcf7, 0xff7676ff, 0xffffb945, 0xfff65ae9}};
 const uint32_t EMPTY[] = {0xff9c2469, 0xff952463, 0xff8e245c, 0xff872355,
                           0xff7f224d, 0xff782247, 0xff702240, 0xff692139};
-uint32_t BG_COLOR = 0xE6D8AD;//0xcc8000;
+uint32_t BG_COLOR = 0xE6D8AD; // 0xcc8000;
 uint32_t figure_color[3];
 
 const int ADD_INDEX = 1;
@@ -228,6 +228,8 @@ std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
                                 const int field[N][N]);
 std::string toABGR(uint32_t c, bool onlyRGB = true);
 std::string code(const Figure &a);
+std::string to_string(const int field[N][N]);
+std::string to_string(const VFigure &vf);
 std::string to_string(const Figure &a, int o = 1);
 void init();
 std::string toString(int t, char separator = ' ', int digits = 3);
@@ -476,6 +478,14 @@ public:
       std::ofstream file(LOG, std::ios::app);
       std::string m(10, '-');
       file << "\n" << m << " " << dateTimeString() << " " << m << "\n";
+      VFigure v;
+      for (auto &a : figures) {
+        if (!a.empty()) {
+          v.push_back(a);
+        }
+      }
+      file << to_string(field) + to_string(v)<< "\n";
+
       for (auto &a : m_out) {
         file << a;
       }
@@ -876,7 +886,7 @@ std::string get_screenshot_winapi(bool save) {
     if (pa.x != -1) {
       pa.y += 9;
       pa.color = getPixelColor(pa.x, pa.y);
-      figure_color[l++] = pa.color;//only valid
+      figure_color[l++] = pa.color; // only valid
       // std::cout<<std::format("{} {:x}\n",n,pa.color);
 
       y = pa.y;

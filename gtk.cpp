@@ -148,7 +148,7 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
       j = (figureIndex[i] << 6) | (a.x << 3) | a.y; // 12bit
       int js = j;
       // todo a.lines == 0 ???
-      if (vf.size() == 2 && a.lines == 0 && lines == 0) {
+      if (vf.size() == 2 /* && a.lines == 0 */ && lines == 0) {
         vc = {code, j};
         std::sort(vc.begin(), vc.end()); // asc
         j = 0;

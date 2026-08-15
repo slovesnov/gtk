@@ -336,13 +336,9 @@ public:
       cr->fill();
     } else {
       VFigure vf;
-      VInt figure_index;
-      n = -1;
       for (auto &f : figures) {
-        n++;
         if (!f.empty()) {
           vf.push_back(f);
-          figure_index.push_back(n);
         }
       }
 
@@ -400,7 +396,7 @@ public:
                       start_angle + angle_step);
               cr->close_path();
               j = n[i];
-              setColor(cr, j == BG_COLOR ? BG_COLOR : figure_color[figure_index[best.n[j]]]);
+              setColor(cr, j == BG_COLOR ? BG_COLOR : figure_color[best.n[j]]);
               cr->fill();
             }
             cr->restore();
@@ -864,9 +860,8 @@ std::string get_screenshot_winapi(bool save) {
     return "";
   }
 
-  int n = -1;
+  l = 0;
   for (auto &a : figures) {
-    n++;
     a.clear();
     // auto start = std::chrono::steady_clock::now();
 
@@ -881,7 +876,7 @@ std::string get_screenshot_winapi(bool save) {
     if (pa.x != -1) {
       pa.y += 9;
       pa.color = getPixelColor(pa.x, pa.y);
-      figure_color[n] = pa.color;
+      figure_color[l++] = pa.color;//only valid
       // std::cout<<std::format("{} {:x}\n",n,pa.color);
 
       y = pa.y;

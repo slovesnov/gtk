@@ -1,16 +1,4 @@
 #include "gtk.h"
-/*
-clear && g++ -std=c++23 e:/slovesno/gtk.cpp `pkg-config gtkmm-4.0 --cflags
---libs` -lgdi32 && ./a.exe clear && g++ -o gtk.exe -std=c++23
-e:/slovesno/gtk.cpp `pkg-config gtkmm-4.0 --cflags --libs` -lgdi32 -mwindows &&
-./gtk.exe
-
--mwindows - в консоль ничего не выводится
-
-C:\msys64\home\user\
-
-fill,time,possible coutn always even game over to best
-*/
 
 std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
                                 const int field[N][N]) {

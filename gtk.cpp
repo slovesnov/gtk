@@ -156,15 +156,6 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
           j |= (j << 12) | a;
         }
         if (set2.contains(j)) {
-          // without 44 142, 
-          // with a.lines == 0 16 112
-          // if (a.lines) {
-          //   std::cout << timeString() << "#" << js << " " << code << "# "
-          //             << uncode(code) << " " << uncode(js) << " " << a.lines
-          //             << "\n";
-          //   std::cout << "#" << js << " " << code << "#\n";
-          // }
-
           skipc2++;
           continue;
         } else {
@@ -192,16 +183,10 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
           r.eq(0, i, a);
           r.eq(1, 1 - i, e);
         }
-      } else {
       }
     }
   }
   return r;
-}
-
-//a in b
-bool subFigure(Figure &a, Figure&b){
-  return true;
 }
 
 std::string bestString() {
@@ -222,7 +207,7 @@ std::string bestString() {
     if (s == prev.code) {
       best = prev.best;
       pWindow->m_out[2] = prev.out[2];
-      return prev.out[1];// + "\nsame";
+      return prev.out[1]; // + "\nsame";
     }
     prev.code = s;
 
@@ -231,9 +216,9 @@ std::string bestString() {
     skipc2 = 0;
     for (auto &a : figures) {
       s = to_string(a);
-      auto it = std::find_if(std::begin(ALL_EXCEPT_DOT),
-                             std::end(ALL_EXCEPT_DOT),
-                             [&s](auto &e) { return e.string == s; });
+      auto it =
+          std::find_if(std::begin(ALL_EXCEPT_DOT), std::end(ALL_EXCEPT_DOT),
+                       [&s](auto &e) { return e.string == s; });
 
       figureIndex.push_back(
           it == std::end(ALL_EXCEPT_DOT)
@@ -262,7 +247,7 @@ std::string bestString() {
       }
 
       std::vector<std::string> vs = {
-          //std::format("estimate {}", toString(best.estimate, ' ', 2)),
+          // std::format("estimate {}", toString(best.estimate, ' ', 2)),
           std::format("after {}", possibleString(vi[2], 2)),
           fillString(N * N - vi[1], 0)};
       s += join(vs);

@@ -72,11 +72,11 @@ std::string join(const std::vector<std::string> &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 
-struct HFigure{
+struct HFigure {
   Figure figure;
   std::string string;
   uint64_t mask;
-}ALL_EXCEPT_DOT[ALL_COUNT - 1];
+} ALL_EXCEPT_DOT[ALL_COUNT - 1];
 
 struct Info {
   int x, y, x1, y1, x2, y2, estimate, lines, end, possibleAfter, field[N][N],
@@ -465,6 +465,7 @@ public:
     int i;
     gets();
     if (saveText) {
+      //  std::ofstream file(LOG, std::ios::out | std::ios::trunc); //w+
       std::ofstream file(LOG, std::ios::app);
       std::string m(10, '-');
       file << "\n" << m << " " << dateTimeString() << " " << m << "\n";
@@ -999,23 +1000,21 @@ Figure stringToFigure(std::string s) {
   return f;
 }
 
-void addAllFigures(const Figure &a, VFigure &vf) {
-  VFigure v;
-  std::set<std::string> set;
-  int x, y, i;
-  auto r = rotate(a);
-  for (x = 0; x < 2; x++) {
-    for (y = 0; y < 2; y++) {
-      for (i = 0; i < 2; i++) {
-        auto f = invertFigure(i ? r : a, x, y);
-        auto s = to_string(f);
-        if (!set.contains(s)) {
-          set.insert(s);
-          vf.push_back(f);
-        }
+bool subFigure(const Figure &inner, const Figure &outer) {
+  if (inner.size() > outer.size() || inner[0].size() > outer[0].size()) {
+    return false;
+  }
+
+  int x, y;
+  for (y = 0; y < inner.size(); y++) {
+    for (x = 0; x < inner[y].size(); x++) {
+      if (!outer[y][x] && inner[y][x]) {
+        return false;
       }
     }
   }
+
+  return true;
 }
 
 void init() {
@@ -1060,12 +1059,37 @@ void init() {
           s = to_string(f);
           if (!set.contains(s)) {
             set.insert(s);
-            ALL_EXCEPT_DOT[k++]={f,s,0};
+            ALL_EXCEPT_DOT[k++] = {f, s, 0};
           }
         }
       }
     }
   }
+
+  k=0;
+  for (auto &a : ALL_EXCEPT_DOT) {
+    uint64_t &m = a.mask;
+    m = 0;
+    for (i = 0; i < ALL_COUNT - 1; i++) {
+      if (subFigure(a.figure, ALL_EXCEPT_DOT[i].figure)) {
+        k++;
+        m |= (1 << i);
+      }
+    }
+  }
+  printf("%d",k);
+  // std::ofstream file(LOG, std::ios::out | std::ios::trunc);
+  // std::string m(10, '-');
+  // file << "\n" << m << " " << dateTimeString() << " " << m << "\n";
+  // for (i = 0; i < ALL_COUNT - 1; i++) {
+  //   for (j = i + 1; j < ALL_COUNT - 1; j++) {
+  //     file << std::format("{} {} {} {} {}\n", i, ALL_EXCEPT_DOT[i].string, j,
+  //                         ALL_EXCEPT_DOT[j].string,
+  //                         subFigure(ALL_EXCEPT_DOT[i].figure,
+  //                         ALL_EXCEPT_DOT[j].figure));
+  //   }
+  // }
+  // file.close();
 
   InvalidInfo.setInvalid();
   gameBegin = std::chrono::steady_clock::now();
@@ -1179,7 +1203,7 @@ bool possibleSquare3(const int field[N][N]) {
   int i, j;
   for (j = 0; j <= N - 3; j++) {
     for (i = 0; i <= N - 3; i++) {
-      if (possibleSquare3(i, j,field)) {
+      if (possibleSquare3(i, j, field)) {
         return true;
       }
     }
@@ -1237,7 +1261,7 @@ std::string possibleString(int i, const int o) {
   }
   auto d = (1 - std::pow(1 - double(i) / ALL_COUNT, 3)) * 100;
   if (o == 0) {
-    return std::format("({},{:.0f}%)", i, d);
+    return std::format(" {} {:.0f}%", i, d);
   } else if (o == 1) {
     return std::format("possible {} {:.2f}%", i, d);
   } else {

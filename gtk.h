@@ -69,7 +69,7 @@ std::string hs;
 
 void copy(const int source[N][N], int dest[N][N]);
 std::string possibleString(int possible, int o);
-std::string fillString(int possible, int o);
+std::string fillString(int possible);
 int countPossible(const int field[N][N]);
 int countFill(const int field[N][N]);
 std::string join(const std::vector<std::string> &vs);
@@ -484,7 +484,7 @@ public:
           v.push_back(a);
         }
       }
-      file << to_string(field) + to_string(v)<< "\n";
+      file << to_string(field) + to_string(v) << "\n";
 
       for (auto &a : m_out) {
         file << a;
@@ -640,11 +640,11 @@ public:
     std::chrono::seconds sec{duration_sec};
 
     std::vector<std::string> vs = {
-        fillString(f, 1),
-        possibleString(countPossible(field), 1),
         std::format("figures {}", total),
         std::format("squares {}", toString(squares)),
         std::format("map {}/{}", m_vec.size(), 5 + 2 + MAP.size()),
+        fillString(f),
+        possibleString(countPossible(field), 1),
         std::format("time {:%T}", sec)};
     s += join(vs);
 
@@ -1277,16 +1277,13 @@ std::string possibleString(int i, const int o) {
   auto d = (1 - std::pow(1 - double(i) / ALL_COUNT, 3)) * 100;
   if (o == 0) {
     return std::format(" {} {:.0f}%", i, d);
-  } else if (o == 1) {
-    return std::format("possible {} {:.2f}%", i, d);
   } else {
-    return std::format("{} {:.2f}%", i, d);
+    return std::format("possible {} {:.2f}%", i, d);
   }
 }
 
-std::string fillString(int i, const int o) {
-  return std::format("fill{} {}/{}={:.2f}%", o == 0 ? "after" : "", i, N * N,
-                     i * 100. / N / N);
+std::string fillString(int i) {
+  return std::format("fill {}/{}={:.2f}%", i, N * N, i * 100. / N / N);
 }
 
 int countFill(const int field[N][N]) {

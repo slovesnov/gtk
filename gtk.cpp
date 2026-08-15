@@ -91,7 +91,7 @@ std::vector<Info> possibleMoves(const Figure &f, const int field[N][N]) {
 }
 
 std::set<uint32_t> set2;
-int skipc2;
+// int skipc2;
 
 int index3(int i, int j) { return j + (i <= j); }
 
@@ -156,7 +156,7 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
           j |= (j << 12) | a;
         }
         if (set2.contains(j)) {
-          skipc2++;
+          // skipc2++;
           continue;
         } else {
           set2.insert(j);
@@ -212,7 +212,7 @@ std::string bestString() {
 
     figureIndex.clear();
     set2.clear();
-    skipc2 = 0;
+    // skipc2 = 0;
     for (auto &a : figures) {
       s = to_string(a);
       auto it =
@@ -245,15 +245,16 @@ std::string bestString() {
 
       std::vector<std::string> vs = {
           // std::format("estimate {}", toString(best.estimate, ' ', 2)),
-          std::format("after {}", possibleString(vi[2], 2)),
-          fillString(N * N - vi[1], 0)};
+          fillString(N * N - vi[1]),
+          possibleString(vi[2], 1),
+      };
       s += join(vs);
     }
     auto end = std::chrono::steady_clock::now();
     auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     s += std::format("time {}ms\n", elapsed.count());
-    s += std::format("size {} {}", set2.size(), skipc2);
+    // s += std::format("size {} {}", set2.size(), skipc2);
 
     prev.out[1] = s + "\n" + hs;
     prev.best = best;

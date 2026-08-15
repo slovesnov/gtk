@@ -32,9 +32,6 @@ const int SAVE_TIMER_MILLISECONDS = 3000;
 const int NT = 2;
 const int N = 8;
 const std::string LOG = "log.txt";
-const std::vector<uint32_t> FC[] = {
-    {0xffab2578}, {0xff59ed9e, 0xff45dcf7, 0xff7676ff, 0xffffb945, 0xfff65ae9}};
-const uint32_t FIGURE_COLOR[] = {0xF5276C, 0x922FEE, 0x45D9AA, 0x0080cc};
 
 const std::unordered_map<std::string, std::string> MAP = {
     {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
@@ -48,8 +45,14 @@ const int SX = 147;
 const int STEP = 52;
 const int SMALL_SQUARE_SIZE = 100;
 const int DRAW_AREA_SQUARE = 21;
+// ABGR
+const std::vector<uint32_t> FC[] = {
+    {0xffab2578}, {0xff59ed9e, 0xff45dcf7, 0xff7676ff, 0xffffb945, 0xfff65ae9}};
 const uint32_t EMPTY[] = {0xff9c2469, 0xff952463, 0xff8e245c, 0xff872355,
                           0xff7f224d, 0xff782247, 0xff702240, 0xff692139};
+uint32_t BG_COLOR = 0xcc8000;
+uint32_t figure_color[3];
+
 const int ADD_INDEX = 1;
 const std::string SAVE_PNG = "save png";
 const std::string SAVE_TEXT = "add text to log";
@@ -62,6 +65,7 @@ class MyWindow;
 MyWindow *pWindow;
 const int ALL_COUNT = 39;
 const int InvalidValue = -1;
+std::string hs;
 
 void copy(const int source[N][N], int dest[N][N]);
 std::string possibleString(int possible, int o);
@@ -72,14 +76,14 @@ std::string join(const std::vector<std::string> &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 
-//#define USE_MASK
+// #define USE_MASK
 
 struct HFigure {
   Figure figure;
   std::string string;
-  #ifdef USE_MASK
+#ifdef USE_MASK
   uint64_t mask;
-  #endif
+#endif
 } ALL_EXCEPT_DOT[ALL_COUNT - 1];
 
 struct Info {
@@ -222,13 +226,12 @@ struct FigureStatistics {
 std::string get_screenshot_winapi(bool save = false);
 std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
                                 const int field[N][N]);
-std::string toRGBA(uint32_t c);
+std::string toABGR(uint32_t c, bool onlyRGB = true);
 std::string code(const Figure &a);
 std::string to_string(const Figure &a, int o = 1);
 void init();
 std::string toString(int t, char separator = ' ', int digits = 3);
 std::string bestString();
-#define ADD_ICON
 
 class MyWindow : public Gtk::Window {
 public:
@@ -239,9 +242,7 @@ public:
     m_title = std::format("gtkmm {}.{}.{}", GTKMM_MAJOR_VERSION,
                           GTKMM_MINOR_VERSION, GTKMM_MICRO_VERSION);
     set_title(m_title);
-#ifdef ADD_ICON
     set_icon_name("app-icon");
-#endif
     // std::string css_data = "textview {"
     //                        "  font-family: 'Monospace', monospace;"
     //                        "  font-size: 16px;"
@@ -274,7 +275,8 @@ public:
     box->append(m_buttonDebug);
     box->append(m_drawing_area);
     box->append(m_scrolled_window[1]);
-    box->append(m_scrolled_window[2]);
+    if (NT > 2)
+      box->append(m_scrolled_window[2]);
 
     auto box1 = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL);
     box1->append(m_scrolled_window[0]);
@@ -313,11 +315,10 @@ public:
     init();
   }
 
-  void setColor(const Cairo::RefPtr<Cairo::Context> &cr, int n) {
-    auto i = FIGURE_COLOR[n];
-    double r = ((i >> 16) & 0xFF) / 255.0;
+  void setColor(const Cairo::RefPtr<Cairo::Context> &cr, int i) {
+    double b = ((i >> 16) & 0xFF) / 255.0;
     double g = ((i >> 8) & 0xFF) / 255.0;
-    double b = (i & 0xFF) / 255.0;
+    double r = (i & 0xFF) / 255.0;
     cr->set_source_rgb(r, g, b);
   }
 
@@ -325,7 +326,6 @@ public:
 
     int i, j, n, x, y, cx, cy;
     const int Q = DRAW_AREA_SQUARE;
-    const int FILL_COLOR_INDEX = 3;
 
     if (best.isInvalid()) {
       auto style_context = get_style_context();
@@ -336,13 +336,18 @@ public:
       cr->fill();
     } else {
       VFigure vf;
+      VInt figure_index;
+      n = -1;
       for (auto &f : figures) {
-        if (!f.empty())
+        n++;
+        if (!f.empty()) {
           vf.push_back(f);
+          figure_index.push_back(n);
+        }
       }
 
       VInt nf[N][N];
-      setColor(cr, FILL_COLOR_INDEX);
+      setColor(cr, BG_COLOR);
       for (y = 0; y < N; y++) {
         for (x = 0; x < N; x++) {
           if (field[y][x])
@@ -366,13 +371,14 @@ public:
                 auto &v = nf[j + y][i + x];
                 v.push_back(n);
                 if (field[j + y][i + x]) {
-                  v.push_back(FILL_COLOR_INDEX);
+                  v.push_back(BG_COLOR);
                 }
               }
             }
           }
         }
       }
+      // hs = std::format("{} {} {}\n", best.n[0], best.n[1], best.n[2]);
 
       for (y = 0; y < N; y++) {
         for (x = 0; x < N; x++) {
@@ -393,14 +399,15 @@ public:
               cr->arc(center_x, center_y, radius, start_angle,
                       start_angle + angle_step);
               cr->close_path();
-              setColor(cr, n[i]);
+              j = n[i];
+              setColor(cr, j == BG_COLOR ? BG_COLOR : figure_color[figure_index[best.n[j]]]);
               cr->fill();
             }
             cr->restore();
             std::sort(n.begin(), n.end());
             std::string s;
             for (auto &a : n) {
-              if (a != FILL_COLOR_INDEX) {
+              if (a != BG_COLOR) {
                 s += std::to_string(a + 1);
               }
             }
@@ -663,7 +670,6 @@ public:
 
 int main(int argc, char *argv[]) {
   auto app = Gtk::Application::create("com.example.myapp");
-#ifdef ADD_ICON
   app->signal_startup().connect([app]() {
     auto display = Gdk::Display::get_default();
     if (display) {
@@ -671,7 +677,6 @@ int main(int argc, char *argv[]) {
       icon_theme->add_resource_path("/com/example/myapp");
     }
   });
-#endif
 
   return app->make_window_and_run<MyWindow>(argc, argv);
 }
@@ -691,12 +696,12 @@ PointInfo getBase(int sx, int width, int sy, int height, int o) {
 
 uint32_t getPixelColor(int x, int y) { return gp[x + y * gtotalWidth]; }
 
-std::string toRGBA(uint32_t c) {
+std::string toABGR(uint32_t c, bool onlyRGB) {
   std::string s;
   int i, j;
-  for (i = 0; i < 4; i++) {
+  for (i = onlyRGB; i < 4; i++) {
     j = (c >> (8 * (3 - i))) & 0xff;
-    s += (i ? "," : "") + std::to_string(j);
+    s += (i == onlyRGB ? "" : ",") + std::to_string(j);
   }
   return s;
 }
@@ -715,23 +720,6 @@ void copy(const int source[N][N], int dest[N][N]) {
     std::copy(source[i], source[i] + N, dest[i]);
 }
 
-Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int crop_x, int crop_y, int crop_w,
-                                       int crop_h) {
-  int rowstride = gtotalWidth * 4;
-  uint8_t *crop_start_ptr =
-      reinterpret_cast<uint8_t *>(gp) + (crop_y * rowstride) + (crop_x * 4);
-
-  return Gdk::Pixbuf::create_from_data(
-      crop_start_ptr,       // Указатель на первый пиксель кропа
-      Gdk::Colorspace::RGB, // Цветовое пространство
-      true,                 // Наличие альфа-канала (has_alpha)
-      8,                    // Глубина цвета (bits_per_sample)
-      crop_w,               // Ширина кропа
-      crop_h,               // Высота кропа
-      rowstride             // Шаг строки исходного (!) буфера
-  );
-}
-
 // o=1 for debug outputs
 std::string dateTimeString(int o) {
   auto now = std::chrono::system_clock::now();
@@ -744,9 +732,21 @@ std::string dateTimeString(int o) {
 }
 
 void savePng(int crop_x, int crop_y, int crop_w, int crop_h) {
-  auto pixbuf = createPixbuf(crop_x, crop_y, crop_w, crop_h);
-
   std::string s;
+  int rowstride = gtotalWidth * 4;
+  uint8_t *crop_start_ptr =
+      reinterpret_cast<uint8_t *>(gp) + (crop_y * rowstride) + (crop_x * 4);
+
+  auto pixbuf = Gdk::Pixbuf::create_from_data(
+      crop_start_ptr,       // Указатель на первый пиксель кропа
+      Gdk::Colorspace::RGB, // Цветовое пространство
+      true,                 // Наличие альфа-канала (has_alpha)
+      8,                    // Глубина цвета (bits_per_sample)
+      crop_w,               // Ширина кропа
+      crop_h,               // Высота кропа
+      rowstride             // Шаг строки исходного (!) буфера
+  );
+
   if (pixbuf) {
     try {
       s = dateTimeString() + ".png";
@@ -823,16 +823,26 @@ std::string get_screenshot_winapi(bool save) {
   if (x + STEP * (N - 1) >= width || y + STEP * (N - 1) >= height)
     return std::format("bounds error {}", __LINE__);
 
+  /*   const uint32_t POSSIBLE_COLOR[] = {
+        0xff59ed9e, 0xffffb945, 0xff45dcf7, 0xff45dcf7,
+        0xff7676ff,
+        0xfff65ae9,//purple
+        0xff75e3a8 , // green+
+        0xff8fbc96,//blue-
+    };
+    hs = "";
+   */
   for (j = 0; j < N; j++) {
     for (i = 0; i < N; i++) {
-      if (debug) {
-        // if (i == 0) {
-        //   k = getPixelColor(x + i * STEP, y + j * STEP);
-        //   l = EMPTY[j];
-        //   printf("%d %x-%x=%d %s %s\n", j, k, l, colorDifference(k, l),
-        //          toRGBA(k).c_str(), toRGBA(l).c_str());
-        // }
-      }
+      // uint32_t k = getPixelColor(x + i * STEP, y + j * STEP);
+      // l = EMPTY[j];
+      // if (k != l) {
+      //   if (std::find(std::begin(POSSIBLE_COLOR), std::end(POSSIBLE_COLOR),
+      //                 k) == std::end(POSSIBLE_COLOR)) {
+      //     hs += std::format("{}{} {} 0x{:x}\n", i, j, toABGR(k), k &
+      //     0xffffff);
+      //   }
+      // }
       field[j][i] = getPixelColor(x + i * STEP, y + j * STEP) != EMPTY[j];
     }
   }
@@ -854,7 +864,9 @@ std::string get_screenshot_winapi(bool save) {
     return "";
   }
 
+  int n = -1;
   for (auto &a : figures) {
+    n++;
     a.clear();
     // auto start = std::chrono::steady_clock::now();
 
@@ -869,6 +881,8 @@ std::string get_screenshot_winapi(bool save) {
     if (pa.x != -1) {
       pa.y += 9;
       pa.color = getPixelColor(pa.x, pa.y);
+      figure_color[n] = pa.color;
+      // std::cout<<std::format("{} {:x}\n",n,pa.color);
 
       y = pa.y;
       for (j = 0; j < 5; j++, y += STEPS) {
@@ -1064,9 +1078,10 @@ void init() {
           if (!set.contains(s)) {
             set.insert(s);
             ALL_EXCEPT_DOT[k++] = {f, s
-              #ifdef MASK
-              , 0
-              #endif
+#ifdef MASK
+                                   ,
+                                   0
+#endif
             };
           }
         }
@@ -1074,7 +1089,7 @@ void init() {
     }
   }
 
-  #ifdef USE_MASK
+#ifdef USE_MASK
   for (auto &a : ALL_EXCEPT_DOT) {
     uint64_t &m = a.mask;
     m = 0;
@@ -1084,7 +1099,7 @@ void init() {
       }
     }
   }
-  #endif
+#endif
 
   InvalidInfo.setInvalid();
   gameBegin = std::chrono::steady_clock::now();

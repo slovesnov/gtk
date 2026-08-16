@@ -1,8 +1,8 @@
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
 #include <format>
 #include <fstream>
-#include <filesystem> 
 #include <gdkmm/general.h>
 #include <gdkmm/pixbuf.h>
 #include <glibmm.h>
@@ -30,36 +30,48 @@ using VFigure = std::vector<Figure>;
 
 int debug = 0;
 int saveText = 0;
-const bool LOG_SCREENS = 1;
+const bool LOG = 0;
 const int TIMER_MILLISECONDS = 500; // 800
 const int SAVE_TIMER_MILLISECONDS = 3000;
 const int NT = 2;
 const int N = 8;
-const std::string LOG = "log.txt";
+const std::string LOG_FILE = "log.txt";
 const std::string SCREEN_DIR = "png";
 
-// if fixed_field is not empty it's debug mode
+const int NF = 1;
 
-std::string fixed_field ="";
+const std::string fixed_field[] = {"", R"(01011001
+11011101
+00111000
+00111111
+00000000
+10011101
+10010100
+00001000
+101 111-111 111 111-10 11
+02[1]_3
+23_1
+52_2
+)",
 
-    /*
-    R"(00010000
-    01011110
-    00011111
-    00000000
-    11100011
-    11010111
-    11010111
-    10010110
-    10 11 01-111 111 111-111 111 111)";
+                                   R"(00010000
+01011110
+00011111
+00000000
+11100011
+11010111
+11010111
+10010110
+10 11 01-111 111 111-111 111 111)",
 
-    */
-/*
-    R"(00000000
+                                   R"(00000000
     11101001 11100001 10000001 11010000 11100000 00110000 10100011 111 111 111 -
     1 -
-    111 111 111 )";
-*/
+    111 111 111 )"};
+
+static_assert(NF>=0 && NF<std::size(fixed_field));
+const bool DEBUG_MODE = !fixed_field[NF].empty();
+
 const std::unordered_map<std::string, std::string> MAP = {
     {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
     {"101 111", "π"},  {"01 11", "corner"}, {"001 001 111", "CORNER"}};
@@ -92,6 +104,7 @@ int gtotalWidth, field[N][N];
 Figure figures[3];
 VInt figureIndex;
 uint32_t *gp;
+std::vector<uint8_t> gbuffer;
 std::chrono::steady_clock::time_point gameBegin;
 class MyWindow;
 MyWindow *pWindow;
@@ -106,14 +119,14 @@ std::string possibleString(int possible, int o);
 std::string fillString(int possible);
 int countPossible(const int field[N][N]);
 int countFill(const int field[N][N]);
-std::string join(const std::vector<std::string> &vs);
+std::string join(const VString &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 std::string possibleStatString();
 void from_string(const std::string &s, int field[N][N], Figure figures[3]);
 void from_string(const std::string &s, Figure &f);
 std::string toString(int t, char separator = ' ', int digits = 3);
-void savePng(bool updateButton);
+std::string savePng();
 // #define USE_MASK
 
 struct HFigure {
@@ -258,7 +271,7 @@ struct FigureStatistics {
   }
 };
 
-std::string get_screenshot_winapi(bool save = false);
+std::string get_screenshot_winapi();
 std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
                                 const int field[N][N]);
 std::string toABGR(uint32_t c, bool onlyRGB = true);
@@ -275,6 +288,7 @@ public:
   MyWindow()
       : m_buttonSave(SAVE_PNG), m_buttonSaveText(SAVE_TEXT), m_buttonDebug() {
     int i;
+
     pWindow = this;
     m_title = std::format("gtkmm {}.{}.{}", GTKMM_MAJOR_VERSION,
                           GTKMM_MINOR_VERSION, GTKMM_MICRO_VERSION);
@@ -327,7 +341,7 @@ public:
     m_drawing_area.set_draw_func(sigc::mem_fun(*this, &MyWindow::on_draw));
 
     m_buttonSave.signal_clicked().connect(
-        [this]() { get_screenshot_winapi(true); });
+        [this]() { updateSaveButton(savePng()); });
 
     m_buttonSaveText.signal_clicked().connect([this]() {
       saveText = 1;
@@ -358,7 +372,7 @@ public:
     int i, j, n, x, y, cx, cy;
     const int Q = DRAW_AREA_SQUARE;
 
-    if (best.isInvalid()) {
+    if (best.isInvalid() && !DEBUG_MODE) {
       auto style_context = get_style_context();
       Gdk::RGBA bg_color;
       style_context->lookup_color("theme_bg_color", bg_color);
@@ -489,7 +503,7 @@ public:
     m_buttonDebug.set_label(debug ? "debug:on" : "debug:off");
   }
 
-  void updateSaveButton(std::string &s) {
+  void updateSaveButton(std::string s) {
     m_buttonSave.set_label(s);
     Glib::signal_timeout().connect(
         [this]() -> bool {
@@ -499,44 +513,50 @@ public:
         SAVE_TIMER_MILLISECONDS);
   }
 
+  void addLog() {
+    //  std::ofstream file(LOG_FILE, std::ios::out | std::ios::trunc); //w+
+    std::ofstream file(LOG_FILE, std::ios::app);
+    std::string m(5, '-');
+    file << "\n" << m << " " << dateTimeString() << " " << m << "\n";
+    VFigure v;
+    for (auto &a : figures) {
+      if (!a.empty()) {
+        v.push_back(a);
+      }
+    }
+    file << to_string(field) + to_string(v) << "\n";
+
+    for (auto &a : m_out) {
+      file << a;
+    }
+    file.close();
+  }
+
   bool timer() {
-    int i, j;
-    if (fixed_field.empty()) {
+    int i;
+    if (DEBUG_MODE) {
+      from_string(fixed_field[NF], field, figures);
+      m_out[1] = bestString();
+      m_drawing_area.queue_draw();
+    } else {
       gets();
       if (saveText) {
-        //  std::ofstream file(LOG, std::ios::out | std::ios::trunc); //w+
-        std::ofstream file(LOG, std::ios::app);
-        std::string m(10, '-');
-        file << "\n" << m << " " << dateTimeString() << " " << m << "\n";
-        VFigure v;
-        for (auto &a : figures) {
-          if (!a.empty()) {
-            v.push_back(a);
-          }
-        }
-        file << to_string(field) + to_string(v) << "\n";
-
-        for (auto &a : m_out) {
-          file << a;
-        }
-        file.close();
+        addLog();
         saveText = 0;
         m_buttonSaveText.set_label(SAVE_TEXT);
       }
-    } else {
-      from_string(fixed_field, field, figures);
-      m_out[1] = bestString();
-      m_drawing_area.queue_draw();
     }
     for (i = 0; i < NT; i++) {
       m_text_view[i].get_buffer()->set_text(m_out[i]);
     }
-    return fixed_field.empty();
+    return !DEBUG_MODE;
   }
 
   void gets() {
     int i, j, f = 0;
-    std::string s1, sf[3], fields;
+    bool log = 0;
+    std::string s1, fields, s2;
+    VString vs;
     for (auto &a : m_out) {
       a = "";
     }
@@ -548,7 +568,9 @@ public:
     }
     i = 0;
     for (auto &a : figures) {
-      if (!a.empty()) {
+      if (a.empty()) {
+        s2 = "";
+      } else {
         s1 = "";
         // recognize lines, squares
         bool all = std::all_of(std::begin(a), std::end(a),
@@ -576,7 +598,7 @@ public:
             return;
           }
         }
-        sf[i] = s1;
+        s2 = s1;
         s1 += " ";
         // s1 += "\n";
         s += s1;
@@ -597,27 +619,15 @@ public:
         s += "\n";
       }
       i++;
+      vs.push_back(s2);
     }
-    fields = "";
-    f = 0;
-    for (j = 0; j < N; j++) {
-      s1 = "";
-      for (i = 0; i < N; i++) {
-        if (field[j][i])
-          f++;
-        s1 += std::to_string(field[j][i]);
-      }
-      fields += s1 + "\n";
-    }
+    f = countFill(field);
+    fields = to_string(field);
 
-    i = std::count_if(std::begin(sf), std::end(sf),
-                      [](auto e) { return !e.empty(); });
+    i = std::count_if(vs.begin(), vs.end(), [](auto e) { return !e.empty(); });
 
     if (i == 3) {
-      s1 = "";
-      for (auto &e : sf) {
-        s1 += e + '#';
-      }
+      s1 = join(vs);
       if (f == 0) {
         newGame();
         startFromEmptyField = 1;
@@ -625,26 +635,24 @@ public:
       if (s1 != m_prev && fields != m_prevfields) {
 
         possibleStat[countPossible(field)]++;
-        if(LOG_SCREENS){
-          savePng(false);
-        }
+        log = 1;
 
         m_prev = s1;
         m_prevfields = fields;
         if (f == 0) {
-          m_vec.clear();
+          m_figureStatistics.clear();
         }
         i = 0;
         std::string cd, mincode;
-        for (auto &e : sf) {
+        for (auto &e : vs) {
           mincode = code(figures[i]);
           cd = to_string(figures[i]);
 
           auto it =
-              std::find_if(m_vec.begin(), m_vec.end(),
+              std::find_if(m_figureStatistics.begin(), m_figureStatistics.end(),
                            [&mincode](auto x) { return x.mincode == mincode; });
-          if (it == m_vec.end()) {
-            m_vec.push_back(FigureStatistics(e, mincode, cd));
+          if (it == m_figureStatistics.end()) {
+            m_figureStatistics.push_back(FigureStatistics(e, mincode, cd));
           } else {
             auto it1 = std::find_if(it->v.begin(), it->v.end(),
                                     [&cd](auto x) { return x.first == cd; });
@@ -659,7 +667,7 @@ public:
     }
 
     int total = 0, max = 0, squares = 0;
-    for (auto &e : m_vec) {
+    for (auto &e : m_figureStatistics) {
       e.count();
       total += e.total;
       squares += e.squares;
@@ -668,9 +676,9 @@ public:
       }
     }
 
-    std::sort(m_vec.begin(), m_vec.end());
+    std::sort(m_figureStatistics.begin(), m_figureStatistics.end());
 
-    for (const auto &e : m_vec)
+    for (const auto &e : m_figureStatistics)
       s += e.to_string(total, max);
 
     auto elapsed = std::chrono::steady_clock::now() - gameBegin;
@@ -678,18 +686,22 @@ public:
         std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
     std::chrono::seconds sec{duration_sec};
 
-    std::vector<std::string> vs = {
-        std::format("figures {}", total),
-        std::format("squares {}", toString(squares)),
-        std::format("map {}/{}", m_vec.size(), 5 + 2 + MAP.size()),
-        fillString(f),
-        possibleString(countPossible(field), 1),
-        std::format("time {:%T}{}", sec, startFromEmptyField ? "" : "*")};
+    vs = {std::format("figures {}", total),
+          std::format("squares {}", toString(squares, ',')),
+          // std::format("map {}/{}", m_figureStatistics.size(), 5 + 2 +
+          // MAP.size()),
+          fillString(f), possibleString(countPossible(field), 1),
+          std::format("time {:%T}{}", sec, startFromEmptyField ? "" : "*")};
     s += join(vs);
 
     s += possibleStatString();
     m_out[0] = s;
     m_out[1] = bestString();
+
+    if (!DEBUG_MODE && LOG && log) {
+      addLog();
+      savePng();
+    }
   }
 
 public:
@@ -710,12 +722,13 @@ public:
   Gtk::Button m_buttonSave, m_buttonSaveText, m_buttonDebug;
   Gtk::DrawingArea m_drawing_area;
   std::string m_prev, m_prevfields;
-  std::vector<FigureStatistics> m_vec;
+  std::vector<FigureStatistics> m_figureStatistics;
   std::string m_title;
 };
 
 int main(int argc, char *argv[]) {
-  auto app = Gtk::Application::create("com.example.myapp");
+  auto app = Gtk::Application::create("com.example.myapp",
+                                      Gio::Application::Flags::NON_UNIQUE);
   app->signal_startup().connect([app]() {
     auto display = Gdk::Display::get_default();
     if (display) {
@@ -723,7 +736,6 @@ int main(int argc, char *argv[]) {
       icon_theme->add_resource_path("/com/example/myapp");
     }
   });
-
   return app->make_window_and_run<MyWindow>(argc, argv);
 }
 
@@ -777,8 +789,9 @@ std::string dateTimeString(int o) {
   return ss.str();
 }
 
-void savePng(bool updateButton) {
-  auto [crop_x,  crop_y, crop_w, crop_h] = picture_rectangle;
+std::string savePng() {
+  auto [crop_x, crop_y, crop_w, crop_h] = picture_rectangle;
+  // auto start = std::chrono::steady_clock::now();
   std::string s;
   int rowstride = gtotalWidth * 4;
   uint8_t *crop_start_ptr =
@@ -796,21 +809,28 @@ void savePng(bool updateButton) {
 
   if (pixbuf) {
     try {
-      s = "./" + SCREEN_DIR+'/'+dateTimeString() + ".png";
+      s = "./" + SCREEN_DIR + '/' + dateTimeString() + ".png";
+
       pixbuf->save(s, "png", {"compression"}, // Вектор имен опций
                    {"9"} // Вектор значений опций (максимальное сжатие)
       );
+      // auto end = std::chrono::steady_clock::now();
+      // auto elapsed =
+      //     std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+      // std::cout << std::format("time {}ms\n", elapsed.count());
+
     } catch (const Glib::Error &ex) {
       s = "error save PNG: " + std::string(ex.what());
+      // std::cout << s << "\n";
     }
   } else {
     s = "cann't create pixbuf";
+    // std::cout << s << "\n";
   }
-  if(updateButton)
-  pWindow->updateSaveButton(s);
+  return s;
 }
 
-std::string get_screenshot_winapi(bool save) {
+std::string get_screenshot_winapi() {
   // 1. Получаем контекст устройства всего экрана
   HDC hScreenDC = GetDC(NULL);
   HDC hMemoryDC = CreateCompatibleDC(hScreenDC);
@@ -836,8 +856,8 @@ std::string get_screenshot_winapi(bool save) {
   bi.biCompression = BI_RGB;
   bi.biSizeImage = 0;
 
-  std::vector<uint8_t> buffer(width * height * 4);
-  GetDIBits(hMemoryDC, hBitmap, 0, height, buffer.data(), (BITMAPINFO *)&bi,
+  gbuffer.resize(width * height * 4);
+  GetDIBits(hMemoryDC, hBitmap, 0, height, gbuffer.data(), (BITMAPINFO *)&bi,
             DIB_RGB_COLORS);
 
   // Освобождаем ресурсы WinAPI
@@ -847,14 +867,14 @@ std::string get_screenshot_winapi(bool save) {
   ReleaseDC(NULL, hScreenDC);
 
   // 5. Конвертируем BGRA в RGBA (GTK ожидает RGBA канал)
-  for (size_t i = 0; i < buffer.size(); i += 4) {
-    uint8_t blue = buffer[i];
-    buffer[i] = buffer[i + 2]; // Red
-    buffer[i + 2] = blue;      // Blue
-                               // buffer[i+3] остается Alpha
+  for (size_t i = 0; i < gbuffer.size(); i += 4) {
+    uint8_t blue = gbuffer[i];
+    gbuffer[i] = gbuffer[i + 2]; // Red
+    gbuffer[i + 2] = blue;       // Blue
+                                 // gbuffer[i+3] остается Alpha
   }
 
-  gp = reinterpret_cast<uint32_t *>(buffer.data());
+  gp = reinterpret_cast<uint32_t *>(gbuffer.data());
   gtotalWidth = width;
 
   PointInfo pa;
@@ -896,17 +916,13 @@ std::string get_screenshot_winapi(bool save) {
       c + SMALL_SQUARE_SIZE >= height)
     return std::format("bounds error {}", __LINE__);
 
-  if (save) {
-    i = pa.x - 120;
-    j = pa.y - 30;
-    if (i < 0 || y < 0) {
-    picture_rectangle={0,0, 1, 1};
-      return std::format("bounds error {}", __LINE__);
-    }
-    picture_rectangle={i,j, 440, 730};
-    savePng(true);
-    return "";
+  i = pa.x - 120;
+  j = pa.y - 30;
+  if (i < 0 || y < 0) {
+    picture_rectangle = {0, 0, 1, 1};
+    return std::format("bounds error {}", __LINE__);
   }
+  picture_rectangle = {i, j, 440, 730};
 
   l = 0;
   for (auto &a : figures) {
@@ -1064,36 +1080,6 @@ std::string toString(int t, char separator, int digits) {
   return s + e;
 }
 
-std::string ltrim(const std::string &s) {
-  std::string::const_iterator it;
-  for (it = s.begin(); it != s.end() && isspace(*it); it++)
-    ;
-  return s.substr(it - s.begin());
-}
-
-std::string rtrim(const std::string &s) {
-  std::string::const_reverse_iterator it;
-  for (it = s.rbegin(); it != s.rend() && isspace(*it); it++)
-    ;
-  return s.substr(0, s.length() - (it - s.rbegin()));
-}
-
-std::string trim(const std::string &s) {
-  std::string q = ltrim(s);
-  return rtrim(q);
-}
-
-VString split(const std::string &subject, const std::string &separator) {
-  VString r;
-  size_t pos, prev;
-  for (prev = 0; (pos = subject.find(separator, prev)) != std::string::npos;
-       prev = pos + separator.length()) {
-    r.push_back(subject.substr(prev, pos - prev));
-  }
-  r.push_back(subject.substr(prev, subject.length()));
-  return r;
-}
-
 void from_string(const std::string &s, Figure &f) {
   VInt v;
   f.clear();
@@ -1108,6 +1094,52 @@ void from_string(const std::string &s, Figure &f) {
   f.push_back(v);
 }
 
+void make_move(int i, int j, const Figure &f, int field[N][N]) {
+  int _x, _y, x, y, l;
+  int fill[N][N], after[N][N];
+  std::set<int> xa, ya;
+
+  copy(field, fill);
+  for (_y = 0; _y < f.size(); _y++) {
+    for (_x = 0; _x < f[_y].size(); _x++) {
+      if (f[_y][_x]) {
+        printf("@");
+        x = _x + i;
+        y = _y + j;
+        xa.insert(x);
+        ya.insert(y);
+        fill[y][x] = 1;
+      }
+    }
+  }
+  copy(fill, after);
+
+  l = 0;
+  for (auto &x : xa) {
+    for (y = 0; y < N && fill[y][x]; y++)
+      ;
+    if (y == N) {
+      for (y = 0; y < N; y++) {
+        after[y][x] = 0;
+      }
+      l++;
+    }
+  }
+
+  for (auto &y : ya) {
+    for (x = 0; x < N && fill[y][x]; x++)
+      ;
+    if (x == N) {
+      for (x = 0; x < N; x++) {
+        after[y][x] = 0;
+      }
+      l++;
+    }
+  }
+
+  copy(after, field);
+}
+
 void from_string(const std::string &s, int field[N][N], Figure figures[3]) {
   int i = 0, j = -1;
   for (auto &a : s) {
@@ -1120,10 +1152,38 @@ void from_string(const std::string &s, int field[N][N], Figure figures[3]) {
     }
   }
 
-  auto v = split(s.substr(j+1), std::string(1, '-'));
-  i = 0;
-  for (auto &a : v) {
-    from_string(trim(a), figures[i++]);
+  Glib::ustring data = s.substr(j + 1);
+  Glib::ustring s1 = R"(([^-\n]+))";
+  Glib::ustring s2 = "\\s*-\\s*";
+  Glib::ustring s3 = R"(\s+(\d{2})(?:\[\d+\])?_(\d))";
+  auto regex =
+      Glib::Regex::create(s1 + s2 + s1 + s2 + s1 + "(?:" + s3 + s3 + s3 + ")?");
+  Glib::MatchInfo match_info;
+
+  std::string g, g1;
+  if (!regex->match(data, match_info)) {
+    std::cout << "not match error line " << __LINE__;
+    return;
+  }
+  j = match_info.get_match_count();
+  for (i = 0; i < 3; i++) {
+    g = match_info.fetch(i + 1);
+    from_string(g, figures[i]);
+  }
+  const int moves = (j - 4) / 2;
+  std::cout << std::format("mc{} {} \n", j, moves);
+  for (i = 0; i < moves; i++) {
+    g = match_info.fetch(4 + 2 * i);//index from 0 so -'0'
+    g1 = match_info.fetch(5 + 2 * i);//g1[0] - '1' because index starts from 1
+    make_move(g[0] - '0', g[1] - '0', figures[g1[0] - '1'], field);
+    // break;
+  }
+  // std::cout << std::format("{} \n", to_string(field));
+
+  if (moves) { // just view moves
+    for (i = 0; i < 3; i++) {
+      figures[i].clear();
+    }
   }
 }
 
@@ -1147,12 +1207,12 @@ bool subFigure(const Figure &inner, const Figure &outer) {
 #endif
 
 void init() {
-  std::vector<std::string> vs;
+  VString vs;
   int x, y, i, j;
   std::string s, key;
   std::set<std::string> set;
 
-  /*first squuare3 & lines5 for possible figures after, dot is ignored*/
+  /*first square3 & lines5 for possible figures after, dot is ignored*/
 
   // square
   for (i = 3; i >= 2; i--) {
@@ -1213,7 +1273,7 @@ void init() {
   }
 #endif
 
-  if (LOG_SCREENS)
+  if (LOG)
     std::filesystem::create_directories("./" + SCREEN_DIR);
 
   InvalidInfo.setInvalid();
@@ -1380,7 +1440,7 @@ int countFill(const int field[N][N]) {
   return c;
 }
 
-std::string join(const std::vector<std::string> &vs) {
+std::string join(const VString &vs) {
   std::string s;
   for (auto &a : vs) {
     s += a + '\n';

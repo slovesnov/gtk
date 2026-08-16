@@ -1,8 +1,8 @@
-#include "aslov.h"
 #include <algorithm>
 #include <chrono>
 #include <format>
 #include <fstream>
+#include <filesystem> 
 #include <gdkmm/general.h>
 #include <gdkmm/pixbuf.h>
 #include <glibmm.h>
@@ -23,37 +23,43 @@
 #include <set>
 #include <windows.h>
 
+using VString = std::vector<std::string>;
 using VInt = std::vector<int>;
 using Figure = std::vector<VInt>;
 using VFigure = std::vector<Figure>;
 
 int debug = 0;
 int saveText = 0;
-const int TIMER_MILLISECONDS = 500;//800
+const bool LOG_SCREENS = 1;
+const int TIMER_MILLISECONDS = 500; // 800
 const int SAVE_TIMER_MILLISECONDS = 3000;
 const int NT = 2;
 const int N = 8;
 const std::string LOG = "log.txt";
+const std::string SCREEN_DIR = "png";
 
 // if fixed_field is not empty it's debug mode
-std::string fixed_field = "";
-/*
-R"(00010000
-01011110
-00011111
-00000000
-11100011
-11010111
-11010111
-10010110
-10 11 01-111 111 111-111 111 111)";
 
+std::string fixed_field ="";
+
+    /*
+    R"(00010000
+    01011110
+    00011111
+    00000000
+    11100011
+    11010111
+    11010111
+    10010110
+    10 11 01-111 111 111-111 111 111)";
+
+    */
+/*
     R"(00000000
     11101001 11100001 10000001 11010000 11100000 00110000 10100011 111 111 111 -
     1 -
     111 111 111 )";
 */
-
 const std::unordered_map<std::string, std::string> MAP = {
     {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
     {"101 111", "π"},  {"01 11", "corner"}, {"001 001 111", "CORNER"}};
@@ -66,6 +72,7 @@ const int SX = 147;
 const int STEP = 52;
 const int SMALL_SQUARE_SIZE = 100;
 const int DRAW_AREA_SQUARE = 21;
+cairo_rectangle_int_t picture_rectangle;
 // ABGR
 const std::vector<uint32_t> FC[] = {
     {0xffab2578}, {0xff59ed9e, 0xff45dcf7, 0xff7676ff, 0xffffb945, 0xfff65ae9}};
@@ -75,8 +82,8 @@ const uint32_t POSSIBLE_COLOR[] = {0xff59ed9e, 0xffffb945, 0xff45dcf7,
                                    0xff45dcf7, 0xff7676ff, 0xfff65ae9};
 
 uint32_t BG_COLOR = 0xE6D8AD;
-//default color fo rebug mode
-uint32_t figure_color[]={0xff59ed9e, 0xffffb945, 0xff45dcf7};
+// default color fo rebug mode
+uint32_t figure_color[] = {0xff59ed9e, 0xffffb945, 0xff45dcf7};
 
 const int ADD_INDEX = 1;
 const std::string SAVE_PNG = "save png";
@@ -103,7 +110,10 @@ std::string join(const std::vector<std::string> &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 std::string possibleStatString();
-void from_string(const std::string&s,Figure&f);
+void from_string(const std::string &s, int field[N][N], Figure figures[3]);
+void from_string(const std::string &s, Figure &f);
+std::string toString(int t, char separator = ' ', int digits = 3);
+void savePng(bool updateButton);
 // #define USE_MASK
 
 struct HFigure {
@@ -514,34 +524,7 @@ public:
         m_buttonSaveText.set_label(SAVE_TEXT);
       }
     } else {
-      const char *p = fixed_field.c_str();
-      for (j = 0; j < N; j++) {
-        for (i = 0; i < N; i++) {
-          while (!strchr("01", *p))
-            p++;
-
-          field[j][i] = *p - '0';
-          p++;
-        }
-      }
-
-      // std::cout << to_string(field);
-
-      auto v = split(p, std::string(1, '-'));
-      for (auto &a : v) {
-        a = trim(a);
-      }
-
-      if (v.size() > 3) {
-        std::cout << "error" << __LINE__;
-        return false;
-      }
-
-      i = 0;
-      for (auto &a : v) {
-        from_string(a,figures[i++]);
-      }
-
+      from_string(fixed_field, field, figures);
       m_out[1] = bestString();
       m_drawing_area.queue_draw();
     }
@@ -642,6 +625,9 @@ public:
       if (s1 != m_prev && fields != m_prevfields) {
 
         possibleStat[countPossible(field)]++;
+        if(LOG_SCREENS){
+          savePng(false);
+        }
 
         m_prev = s1;
         m_prevfields = fields;
@@ -791,7 +777,8 @@ std::string dateTimeString(int o) {
   return ss.str();
 }
 
-void savePng(int crop_x, int crop_y, int crop_w, int crop_h) {
+void savePng(bool updateButton) {
+  auto [crop_x,  crop_y, crop_w, crop_h] = picture_rectangle;
   std::string s;
   int rowstride = gtotalWidth * 4;
   uint8_t *crop_start_ptr =
@@ -809,7 +796,7 @@ void savePng(int crop_x, int crop_y, int crop_w, int crop_h) {
 
   if (pixbuf) {
     try {
-      s = dateTimeString() + ".png";
+      s = "./" + SCREEN_DIR+'/'+dateTimeString() + ".png";
       pixbuf->save(s, "png", {"compression"}, // Вектор имен опций
                    {"9"} // Вектор значений опций (максимальное сжатие)
       );
@@ -819,6 +806,7 @@ void savePng(int crop_x, int crop_y, int crop_w, int crop_h) {
   } else {
     s = "cann't create pixbuf";
   }
+  if(updateButton)
   pWindow->updateSaveButton(s);
 }
 
@@ -912,30 +900,22 @@ std::string get_screenshot_winapi(bool save) {
     i = pa.x - 120;
     j = pa.y - 30;
     if (i < 0 || y < 0) {
+    picture_rectangle={0,0, 1, 1};
       return std::format("bounds error {}", __LINE__);
     }
-    savePng(i, j, 440, 730);
+    picture_rectangle={i,j, 440, 730};
+    savePng(true);
     return "";
   }
 
   l = 0;
   for (auto &a : figures) {
     a.clear();
-    // auto start = std::chrono::steady_clock::now();
-
     pa = getBase(b, SMALL_SQUARE_SIZE, c, SMALL_SQUARE_SIZE, 1);
-
-    // auto end = std::chrono::steady_clock::now();
-    // auto elapsed =
-    //     std::chrono::duration_cast<std::chrono::milliseconds>(end -
-    //     start);
-    // std::cout << "Elapsed time1: " << elapsed.count() << " ms\n";
-
     if (pa.x != -1) {
       pa.y += 9;
       pa.color = getPixelColor(pa.x, pa.y);
       figure_color[l++] = pa.color; // only valid
-      // std::cout<<std::format("{} {:x}\n",n,pa.color);
 
       y = pa.y;
       for (j = 0; j < 5; j++, y += STEPS) {
@@ -1056,17 +1036,95 @@ std::string invert(const Figure &a, bool x, bool y) {
   return to_string(invertFigure(a, x, y));
 }
 
-void from_string(const std::string&s,Figure&f) {
+std::string toString(int t, char separator, int digits) {
+  // std::fixed to prevents scientific notation t=1234567.890123 b=1.23457e
+  // +06
+  std::stringstream c;
+  c << std::fixed << t;
+  std::string s, e, b = c.str();
+  std::string::size_type p, p1;
+  p = b.find('.');
+  if (p != std::string::npos) {
+    for (p1 = b.length() - 1; p1 > p && b[p1] == '0'; p1--)
+      ;            //"3.875000"->"3.875"
+    if (p != p1) { //"1.000" -> "1"
+      e = b.substr(p, p1 - p + 1);
+    }
+    b = b.substr(0, p);
+  }
+  bool negative = std::is_signed<int>::value && t < 0;
+  unsigned i = b.length() - 1;
+  for (char a : b) {
+    s += a;
+    if (i % digits == 0 && i != 0 && (!negative || i != b.length() - 1)) {
+      s += separator;
+    }
+    i--;
+  }
+  return s + e;
+}
+
+std::string ltrim(const std::string &s) {
+  std::string::const_iterator it;
+  for (it = s.begin(); it != s.end() && isspace(*it); it++)
+    ;
+  return s.substr(it - s.begin());
+}
+
+std::string rtrim(const std::string &s) {
+  std::string::const_reverse_iterator it;
+  for (it = s.rbegin(); it != s.rend() && isspace(*it); it++)
+    ;
+  return s.substr(0, s.length() - (it - s.rbegin()));
+}
+
+std::string trim(const std::string &s) {
+  std::string q = ltrim(s);
+  return rtrim(q);
+}
+
+VString split(const std::string &subject, const std::string &separator) {
+  VString r;
+  size_t pos, prev;
+  for (prev = 0; (pos = subject.find(separator, prev)) != std::string::npos;
+       prev = pos + separator.length()) {
+    r.push_back(subject.substr(prev, pos - prev));
+  }
+  r.push_back(subject.substr(prev, subject.length()));
+  return r;
+}
+
+void from_string(const std::string &s, Figure &f) {
   VInt v;
+  f.clear();
   for (auto &a : s) {
-    if (a == ' ') {
+    if (strchr("01", a)) {
+      v.push_back(a - '0');
+    } else {
       f.push_back(v);
       v.clear();
-    } else {
-      v.push_back(a - '0');
     }
   }
   f.push_back(v);
+}
+
+void from_string(const std::string &s, int field[N][N], Figure figures[3]) {
+  int i = 0, j = -1;
+  for (auto &a : s) {
+    j++;
+    if (strchr("01", a)) {
+      field[i / N][i % N] = a - '0';
+      if (++i == N * N) {
+        break;
+      }
+    }
+  }
+
+  auto v = split(s.substr(j+1), std::string(1, '-'));
+  i = 0;
+  for (auto &a : v) {
+    from_string(trim(a), figures[i++]);
+  }
 }
 
 #ifdef MASK
@@ -1121,7 +1179,7 @@ void init() {
   int k = 0;
   Figure a;
   for (const auto &key : vs) {
-    from_string(key,a);
+    from_string(key, a);
     set.clear();
     auto r = rotate(a);
     for (x = 0; x < 2; x++) {
@@ -1154,6 +1212,9 @@ void init() {
     }
   }
 #endif
+
+  if (LOG_SCREENS)
+    std::filesystem::create_directories("./" + SCREEN_DIR);
 
   InvalidInfo.setInvalid();
   newGame();
@@ -1354,7 +1415,7 @@ std::string possibleStatString() {
 
   double total = 0;
   for (auto &a : v) {
-    s += std::format("{} - {} {:.1f}%\n", possibleString(a.first, 2),a.second,
+    s += std::format("{} - {} {:.1f}%\n", possibleString(a.first, 2), a.second,
                      a.second * 100. / sum);
 
     auto d = std::pow(1 - double(a.first) / ALL_COUNT, 3);

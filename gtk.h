@@ -1494,27 +1494,30 @@ std::string possibleStatString() {
 
   double total = 0;
   for (auto &a : v) {
-    s += std::format("{} - {} {:.1f}%\n", possibleString(a.first, 2), a.second,
+    s += std::format("{} {} {:.1f}%\n", a.first, a.second,
                      a.second * 100. / sum);
+    // s += std::format("{} - {} {:.1f}%\n", possibleString(a.first, 2), a.second,
+    //                  a.second * 100. / sum);
 
     auto d = std::pow(1 - double(a.first) / ALL_COUNT, 3);
     total += d * a.second / sum;
   }
-  s += std::format("total bad {:.1f}% sum{}\n", total * 100, sum);
+  s += std::format("total({}) {} bad {:.1f}%\n",v.size(), sum, total * 100);
   return s;
 }
 
 std::string fillStatString() {
+  auto&v=fillStatistics;
   std::string s = "fill statistics\n";
-  std::sort(fillStatistics.begin(), fillStatistics.end(),
-            [](auto &a, auto &b) { return a.second > b.second; });
-  int sum = std::accumulate(fillStatistics.begin(), fillStatistics.end(), 0,
+  std::sort(v.begin(), v.end(),
+            [](auto &a, auto &b) { return a.second > b.second || a.second == b.second && a.first > b.first; });
+  int sum = std::accumulate(v.begin(), v.end(), 0,
                             [](int acc, auto &e) { return acc + e.second; });
 
-  for (auto &a : fillStatistics) {
-    s += std::format("{}  {} {:.1f}%\n", a.first, a.second,
+  for (auto &a : v) {
+    s += std::format("{} {} {:.1f}%\n", a.first, a.second,
                      a.second * 100. / sum);
   }
-  s += std::format("total {}\n", sum);
+  s += std::format("total({}) {}\n",v.size(), sum);
   return s;
 }

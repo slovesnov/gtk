@@ -30,7 +30,7 @@ using VFigure = std::vector<Figure>;
 
 int debug = 0;
 int saveText = 0;
-const bool LOG = 0;
+const bool LOG = 1;
 const int TIMER_MILLISECONDS = 500; // 800
 const int SAVE_TIMER_MILLISECONDS = 3000;
 const int NT = 2;
@@ -69,7 +69,7 @@ const std::string fixed_field[] = {"", R"(01011001
     1 -
     111 111 111 )"};
 
-static_assert(NF>=0 && NF<std::size(fixed_field));
+static_assert(NF >= 0 && NF < std::size(fixed_field));
 const bool DEBUG_MODE = !fixed_field[NF].empty();
 
 const std::unordered_map<std::string, std::string> MAP = {
@@ -113,6 +113,7 @@ const int InvalidValue = -1;
 std::string hs;
 int possibleStat[ALL_COUNT + 1];
 bool startFromEmptyField = 0;
+std::vector<std::pair<int, int>> fillStatistics;
 
 void copy(const int source[N][N], int dest[N][N]);
 std::string possibleString(int possible, int o);
@@ -123,6 +124,7 @@ std::string join(const VString &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 std::string possibleStatString();
+std::string fillStatString();
 void from_string(const std::string &s, int field[N][N], Figure figures[3]);
 void from_string(const std::string &s, Figure &f);
 std::string toString(int t, char separator = ' ', int digits = 3);
@@ -586,6 +588,11 @@ public:
           if (all) {
             s1 += a.size() == 1 ? std::to_string(a[0].size()) /*+ "H"*/
                                 : std::format("square{}", a.size());
+            if (a.size() < 1 || a.size() > 3) { // was square5
+              best.setInvalid();
+              m_out[0] = "unrecognized1";
+              return;
+            }
           }
         }
         if (s1.empty()) {
@@ -633,15 +640,23 @@ public:
         startFromEmptyField = 1;
       }
       if (s1 != m_prev && fields != m_prevfields) {
-
-        possibleStat[countPossible(field)]++;
-        log = 1;
-
         m_prev = s1;
         m_prevfields = fields;
-        if (f == 0) {
-          m_figureStatistics.clear();
+        log = 1;
+
+        possibleStat[countPossible(field)]++;
+
+        auto it = std::find_if(fillStatistics.begin(), fillStatistics.end(),
+                               [&f](auto x) { return x.first == f; });
+        if (it == fillStatistics.end()) {
+          fillStatistics.push_back({f, 1});
+        } else {
+          it->second++;
         }
+
+        // if (f == 0) {
+        //   m_figureStatistics.clear();
+        // }
         i = 0;
         std::string cd, mincode;
         for (auto &e : vs) {
@@ -695,6 +710,7 @@ public:
     s += join(vs);
 
     s += possibleStatString();
+    s += fillStatString();
     m_out[0] = s;
     m_out[1] = bestString();
 
@@ -728,8 +744,8 @@ public:
 
 int main(int argc, char *argv[]) {
   auto app = Gtk::Application::create("com.example.myapp"
-    // ,  Gio::Application::Flags::NON_UNIQUE
-                                    );
+                                      // ,  Gio::Application::Flags::NON_UNIQUE
+  );
   app->signal_startup().connect([app]() {
     auto display = Gdk::Display::get_default();
     if (display) {
@@ -1174,8 +1190,8 @@ void from_string(const std::string &s, int field[N][N], Figure figures[3]) {
   const int moves = (j - 4) / 2;
   std::cout << std::format("mc{} {} \n", j, moves);
   for (i = 0; i < moves; i++) {
-    g = match_info.fetch(4 + 2 * i);//index from 0 so -'0'
-    g1 = match_info.fetch(5 + 2 * i);//g1[0] - '1' because index starts from 1
+    g = match_info.fetch(4 + 2 * i);  // index from 0 so -'0'
+    g1 = match_info.fetch(5 + 2 * i); // g1[0] - '1' because index starts from 1
     make_move(g[0] - '0', g[1] - '0', figures[g1[0] - '1'], field);
     // break;
   }
@@ -1455,6 +1471,8 @@ void newGame() {
   }
   gameBegin = std::chrono::steady_clock::now();
   best.setInvalid();
+  fillStatistics.clear();
+  pWindow->m_figureStatistics.clear();
 }
 
 std::string possibleStatString() {
@@ -1483,5 +1501,20 @@ std::string possibleStatString() {
     total += d * a.second / sum;
   }
   s += std::format("total bad {:.1f}% sum{}\n", total * 100, sum);
+  return s;
+}
+
+std::string fillStatString() {
+  std::string s = "fill statistics\n";
+  std::sort(fillStatistics.begin(), fillStatistics.end(),
+            [](auto &a, auto &b) { return a.second > b.second; });
+  int sum = std::accumulate(fillStatistics.begin(), fillStatistics.end(), 0,
+                            [](int acc, auto &e) { return acc + e.second; });
+
+  for (auto &a : fillStatistics) {
+    s += std::format("{}  {} {:.1f}%\n", a.first, a.second,
+                     a.second * 100. / sum);
+  }
+  s += std::format("total {}\n", sum);
   return s;
 }

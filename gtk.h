@@ -75,7 +75,8 @@ const uint32_t POSSIBLE_COLOR[] = {0xff59ed9e, 0xffffb945, 0xff45dcf7,
                                    0xff45dcf7, 0xff7676ff, 0xfff65ae9};
 
 uint32_t BG_COLOR = 0xE6D8AD;
-uint32_t figure_color[3];
+//default color fo rebug mode
+uint32_t figure_color[]={0xff59ed9e, 0xffffb945, 0xff45dcf7};
 
 const int ADD_INDEX = 1;
 const std::string SAVE_PNG = "save png";
@@ -102,7 +103,7 @@ std::string join(const std::vector<std::string> &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 std::string possibleStatString();
-Figure stringToFigure(std::string s);
+void from_string(const std::string&s,Figure&f);
 // #define USE_MASK
 
 struct HFigure {
@@ -538,20 +539,10 @@ public:
 
       i = 0;
       for (auto &a : v) {
-        figures[i] = stringToFigure(a);
-        // std::cout << "#" << to_string(figures[i]) << "#\n";
-        i++;
+        from_string(a,figures[i++]);
       }
 
-      std::string s;
-      uint32_t u[] = {0xff59ed9e, 0xffffb945, 0xff45dcf7};
-      i = 0;
-      for (auto &a : figure_color) {
-        a = u[i++];
-      }
-      s = bestString();
-      m_out[1] = s;
-      std::cout << s << "\n";
+      m_out[1] = bestString();
       m_drawing_area.queue_draw();
     }
     for (i = 0; i < NT; i++) {
@@ -1065,8 +1056,7 @@ std::string invert(const Figure &a, bool x, bool y) {
   return to_string(invertFigure(a, x, y));
 }
 
-Figure stringToFigure(std::string s) {
-  Figure f;
+void from_string(const std::string&s,Figure&f) {
   VInt v;
   for (auto &a : s) {
     if (a == ' ') {
@@ -1077,9 +1067,9 @@ Figure stringToFigure(std::string s) {
     }
   }
   f.push_back(v);
-  return f;
 }
 
+#ifdef MASK
 bool subFigure(const Figure &inner, const Figure &outer) {
   if (inner.size() > outer.size() || inner[0].size() > outer[0].size()) {
     return false;
@@ -1096,6 +1086,7 @@ bool subFigure(const Figure &inner, const Figure &outer) {
 
   return true;
 }
+#endif
 
 void init() {
   std::vector<std::string> vs;
@@ -1128,8 +1119,9 @@ void init() {
   }
 
   int k = 0;
+  Figure a;
   for (const auto &key : vs) {
-    auto a = stringToFigure(key);
+    from_string(key,a);
     set.clear();
     auto r = rotate(a);
     for (x = 0; x < 2; x++) {

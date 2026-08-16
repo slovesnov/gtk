@@ -38,7 +38,7 @@ const int N = 8;
 const std::string LOG_FILE = "log.txt";
 const std::string SCREEN_DIR = "png";
 
-const int NF = 1;
+const int NF = 0;
 
 const std::string fixed_field[] = {"", R"(01011001
 11011101
@@ -727,8 +727,9 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-  auto app = Gtk::Application::create("com.example.myapp",
-                                      Gio::Application::Flags::NON_UNIQUE);
+  auto app = Gtk::Application::create("com.example.myapp"
+    // ,  Gio::Application::Flags::NON_UNIQUE
+                                    );
   app->signal_startup().connect([app]() {
     auto display = Gdk::Display::get_default();
     if (display) {

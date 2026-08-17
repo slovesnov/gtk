@@ -216,12 +216,17 @@ bool same(const VFigure &v, const int field[N][N]) {
   for (auto &p : permutations(v.size())) {
     copy(field, t);
     for (auto &i : p) {
-      if(!make_move(best.gx(i), best.gy(i), v[i], t)){
+      if(!make_move(best.gx(i), best.gy(i), v[best.n[i]], t)){
+        std::cout<<std::format("imp {} {} {} {} j={}\n", best.gx(i), best.gy(i),to_string(v[i]),to_string(t),j);
         return false;
       }
     }
     if (j) {
       if (!same(t, a)) {
+        for(auto&q:p){
+          printf("%d ",q);
+        }
+        printf("\n");
         return false;
       }
     } else {
@@ -275,6 +280,7 @@ std::string bestString() {
       if (v.size() == 1) {
         best.n[0] = 0;
       } else {
+        std::cout<<to_string(v)<<"\nallfigures\n"<<best.n[0]<<" "<<best.n[1]<<" "<<best.n[2]<<"\n";
         so = (same(v, field) ? "any order" : "order important") + std::string("\n");
       }
       s = so;

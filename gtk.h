@@ -1195,6 +1195,7 @@ bool make_move(int i, int j, const Figure &f, int field[N][N]) {
         x = _x + i;
         y = _y + j;
         if (field[y][x]) {
+          std::cout<<std::format("er {} {}, {} {}, {}\n" ,x, y,_x,_y,to_string(f));
           return false;
         }
         xa.insert(x);

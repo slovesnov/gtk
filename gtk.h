@@ -128,6 +128,7 @@ std::string toString(int t, char separator = ' ', int digits = 3);
 std::string savePng();
 Figure rotate(const Figure &matrix);
 Figure invertFigure(const Figure &a, bool x, bool y);
+Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int o);
 
 struct HFigure {
   Figure figure;
@@ -432,6 +433,7 @@ public:
 
     int i, j, n, x, y, cx, cy;
     const int Q = DRAW_AREA_SQUARE;
+    const bool usePixbuf = 0;
 
     if (best.isInvalid() && !DEBUG_MODE) {
       auto style_context = get_style_context();
@@ -449,14 +451,26 @@ public:
       }
 
       VInt nf[N][N];
-      setColor(cr, BG_COLOR);
-      for (y = 0; y < N; y++) {
-        for (x = 0; x < N; x++) {
-          if (field[y][x])
-            cr->rectangle(x * Q, y * Q, Q, Q);
+
+      if (usePixbuf) {
+        auto pixbuf = createPixbuf(1);
+        int dest_width = Q * N;
+        int dest_height = Q * N;
+        Glib::RefPtr<Gdk::Pixbuf> resized_pixbuf =
+            pixbuf->scale_simple(Q * N, Q * N, Gdk::InterpType::BILINEAR);
+
+        Gdk::Cairo::set_source_pixbuf(cr, resized_pixbuf, 0, 0);
+        cr->paint();
+      } else {
+        setColor(cr, BG_COLOR);
+        for (y = 0; y < N; y++) {
+          for (x = 0; x < N; x++) {
+            if (field[y][x])
+              cr->rectangle(x * Q, y * Q, Q, Q);
+          }
         }
+        cr->fill();
       }
-      cr->fill();
 
       const int BITS = 4;
       const int MB = 1 << BITS;
@@ -519,15 +533,17 @@ public:
       }
     }
 
-    cr->set_source_rgb(0.0, 0.0, 0.0);
-    cr->set_line_width(1.0);
-    for (i = 1; i < N; i++) {
-      cr->move_to(0, i * Q + .5);
-      cr->line_to(width, i * Q + .5);
-      cr->move_to(i * Q + .5, 0);
-      cr->line_to(i * Q + .5, height);
+    if (!usePixbuf) {
+      cr->set_source_rgb(0.0, 0.0, 0.0);
+      cr->set_line_width(1.0);
+      for (i = 1; i < N; i++) {
+        cr->move_to(0, i * Q + .5);
+        cr->line_to(width, i * Q + .5);
+        cr->move_to(i * Q + .5, 0);
+        cr->line_to(i * Q + .5, height);
+      }
+      cr->stroke();
     }
-    cr->stroke();
   }
 
   void draw_text(const Cairo::RefPtr<Cairo::Context> &cr, int square_x,
@@ -893,24 +909,31 @@ std::string dateTimeString(int o) {
   return ss.str();
 }
 
-std::string savePng() {
+Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int o) {
   auto [crop_x, crop_y, crop_w, crop_h] = picture_rectangle;
-  // auto start = std::chrono::steady_clock::now();
-  std::string s;
+  if (o) {
+    crop_x += 6;
+    crop_y += 150;
+    crop_h = crop_w = 428;
+  }
   int rowstride = gtotalWidth * 4;
   uint8_t *crop_start_ptr =
       reinterpret_cast<uint8_t *>(gp) + (crop_y * rowstride) + (crop_x * 4);
 
-  auto pixbuf = Gdk::Pixbuf::create_from_data(
-      crop_start_ptr,       // Указатель на первый пиксель кропа
-      Gdk::Colorspace::RGB, // Цветовое пространство
-      true,                 // Наличие альфа-канала (has_alpha)
-      8,                    // Глубина цвета (bits_per_sample)
-      crop_w,               // Ширина кропа
-      crop_h,               // Высота кропа
-      rowstride             // Шаг строки исходного (!) буфера
-  );
+  return Gdk::Pixbuf::create_from_data(
+             crop_start_ptr,       // Указатель на первый пиксель кропа
+             Gdk::Colorspace::RGB, // Цветовое пространство
+             true,                 // Наличие альфа-канала (has_alpha)
+             8,                    // Глубина цвета (bits_per_sample)
+             crop_w,               // Ширина кропа
+             crop_h,               // Высота кропа
+             rowstride             // Шаг строки исходного (!) буфера
+         );
+}
 
+std::string savePng() {
+  std::string s;
+  auto pixbuf = createPixbuf(0);
   if (pixbuf) {
     try {
       s = dateTimeString() + ".png";
@@ -918,10 +941,6 @@ std::string savePng() {
                    {"compression"}, // Вектор имен опций
                    {"9"} // Вектор значений опций (максимальное сжатие)
       );
-      // auto end = std::chrono::steady_clock::now();
-      // auto elapsed =
-      //     std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-      // std::cout << std::format("time {}ms\n", elapsed.count());
 
     } catch (const Glib::Error &ex) {
       s = "error save PNG: " + std::string(ex.what());

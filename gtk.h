@@ -72,10 +72,10 @@ const std::string fixed_field[] = {R"(01011001
 
 static_assert(NF >= -1 && NF < int(std::size(fixed_field)));
 const bool DEBUG_MODE = NF != -1;
-
+const char BIGCORNER[] = "001 001 111";
 const std::unordered_map<std::string, std::string> MAP = {
     {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
-    {"101 111", "π"},  {"01 11", "corner"}, {"001 001 111", "CORNER"}};
+    {"101 111", "π"},  {"01 11", "corner"}, {BIGCORNER, "CORNER"}};
 const int DX = 763 - 852;
 const int DY = 347 - 202;
 const int DX1 = 743 - 763;
@@ -110,6 +110,7 @@ std::chrono::steady_clock::time_point gameBegin;
 const int ALL_COUNT = 39;
 const int InvalidValue = -1;
 bool startFromEmptyField = 0;
+VInt bigCorner;
 VPIntInt fillStatistics, possibleStatistics;
 
 void copy(const int source[N][N], int dest[N][N]);
@@ -128,14 +129,10 @@ std::string toString(int t, char separator = ' ', int digits = 3);
 std::string savePng();
 Figure rotate(const Figure &matrix);
 Figure invertFigure(const Figure &a, bool x, bool y);
-// #define USE_MASK
 
 struct HFigure {
   Figure figure;
   std::string string;
-#ifdef USE_MASK
-  uint64_t mask;
-#endif
 } ALL_EXCEPT_DOT[ALL_COUNT - 1];
 
 struct Info {
@@ -410,29 +407,16 @@ public:
             s = to_string(f);
             if (!set.contains(s)) {
               set.insert(s);
-              ALL_EXCEPT_DOT[k++] = {f, s
-#ifdef MASK
-                                     ,
-                                     0
-#endif
-              };
+              if (key == BIGCORNER) {
+                // std::cout<< to_string(f)<<" " <<k<<"\n";
+                bigCorner.push_back(k);
+              }
+              ALL_EXCEPT_DOT[k++] = {f, s};
             }
           }
         }
       }
     }
-
-#ifdef USE_MASK
-    for (auto &a : ALL_EXCEPT_DOT) {
-      uint64_t &m = a.mask;
-      m = 0;
-      for (i = 0; i < ALL_COUNT - 1; i++) {
-        if (subFigure(a.figure, ALL_EXCEPT_DOT[i].figure)) {
-          m |= (1 << i);
-        }
-      }
-    }
-#endif
 
     if (LOG)
       std::filesystem::create_directories("./" + SCREEN_DIR);
@@ -1353,10 +1337,10 @@ bool hasPossibleMoves(const Figure &f, const int field[N][N]) {
   return false;
 }
 
-bool possibleSquare3(int i, int j, const int field[N][N]) {
+bool possibleRectange(int i, int j, const int field[N][N], int w, int h) {
   int x, y;
-  for (x = 0; x < 3; x++) {
-    for (y = 0; y < 3; y++) {
+  for (x = 0; x < w; x++) {
+    for (y = 0; y < h; y++) {
       if (field[y + j][x + i])
         return false;
     }
@@ -1364,69 +1348,64 @@ bool possibleSquare3(int i, int j, const int field[N][N]) {
   return true;
 }
 
-bool possibleV(int i, int j, const int field[N][N], int n) {
-  int y;
-  for (y = 0; y < n; y++) {
-    if (field[y + j][i])
-      return false;
+bool possibleRectange(const int field[N][N], int w, int h) {
+  int i, j;
+  for (j = 0; j <= N - w; j++) {
+    for (i = 0; i <= N - h; i++) {
+      if (possibleRectange(i, j, field, w, h)) {
+        return true;
+      }
+    }
   }
-  return true;
-}
-
-bool possibleH(int i, int j, const int field[N][N], int n) {
-  int x;
-  for (x = 0; x < n; x++) {
-    if (field[j][x + i])
-      return false;
-  }
-  return true;
+  return false;
 }
 
 bool possibleSquare3(const int field[N][N]) {
-  int i, j;
-  for (j = 0; j <= N - 3; j++) {
-    for (i = 0; i <= N - 3; i++) {
-      if (possibleSquare3(i, j, field)) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return possibleRectange(field, 3, 3);
 }
 
 bool possibleV(const int field[N][N], int n) {
-  int i, j;
-  for (j = 0; j <= N - 5; j++) {
-    for (i = 0; i <= N - 1; i++) {
-      if (possibleV(i, j, field, n)) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return possibleRectange(field, 1, n);
 }
 
 bool possibleH(const int field[N][N], int n) {
-  int i, j;
-  for (j = 0; j <= N - 1; j++) {
-    for (i = 0; i <= N - 5; i++) {
-      if (possibleH(i, j, field, n)) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return possibleRectange(field, n, 1);
 }
 
 int countPossible(const int field[N][N]) {
   int i, j;
-  bool square3 = possibleSquare3(field), h5, v5;
+  bool square3 = possibleSquare3(field), h5, v5, r23, r32;
   if (square3) {
     h5 = possibleV(field, 5);
     v5 = possibleH(field, 5);
     return ALL_COUNT - 2 + (h5 ? 1 : possibleH(field, 4) - 1) +
            (v5 ? 1 : possibleV(field, 4) - 1);
   } else {
+    if (r23 && r32) {
+      h5 = possibleV(field, 5);
+      v5 = possibleH(field, 5);
+      j = -1 - bigCorner.size();
+      for (auto &a : bigCorner) {
+        j += hasPossibleMoves(ALL_EXCEPT_DOT[a].figure, field);
+      }
+      j += ALL_COUNT - 2 + (h5 ? 1 : possibleH(field, 4) - 1) +
+           (v5 ? 1 : possibleV(field, 4) - 1);
+
+      i = 0, j = -1;
+      for (auto &e : ALL_EXCEPT_DOT) {
+        j++;
+        if (j && hasPossibleMoves(e.figure, field)) {
+          i++;
+        }
+      }
+      if (j == i + 1) {
+        printf("=");
+      } else {
+        printf("!=");
+        throw 0;
+      }
+      return i + 1;
+    }
     i = 0, j = -1;
     for (auto &e : ALL_EXCEPT_DOT) {
       j++;

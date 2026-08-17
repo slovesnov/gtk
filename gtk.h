@@ -200,7 +200,7 @@ struct Info {
 
   std::string to_string() {
     return std::format(
-        "{}{}{}{}{}→{} ", x, y, lines ? '[' + std::to_string(lines) + ']' : "",
+        "{}{}{}{}{}→{}", x, y, lines ? '[' + std::to_string(lines) + ']' : "",
         end ? "e" : "",
         possibleAfter == InvalidValue ? "" : possibleString(possibleAfter, 0),
         estimate);
@@ -271,7 +271,8 @@ struct FigureStatistics {
 
 std::string get_screenshot_winapi();
 std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
-                                const int field[N][N]);
+                                const int field[N][N],
+                                bool fromEstimate = false);
 std::string toABGR(uint32_t c, bool onlyRGB = true);
 std::string code(const Figure &a);
 std::string to_string(const int field[N][N]);
@@ -689,12 +690,12 @@ public:
           j++;
         }
 
+        // todo
         auto v = possibleMoves(a, recent, field);
         std::sort(v.begin(), v.end());
         for (auto &e : v) {
-          s += e.to_string();
+          s += e.to_string() + "\n";
         }
-        s += "\n";
       }
       i++;
       vs.push_back(s2);
@@ -752,6 +753,9 @@ public:
       }
     }
 
+    auto se = s;
+    s = "";
+
     std::sort(m_figureStatistics.begin(), m_figureStatistics.end());
 
     for (const auto &e : m_figureStatistics)
@@ -772,6 +776,7 @@ public:
 
     s += possibleStatString();
     s += fillStatString();
+    s += se;
     m_out[0] = s;
     m_out[1] = bestString();
     i = best.isInvalid() ? possible : best.estimate / 10000;

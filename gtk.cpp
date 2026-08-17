@@ -1,7 +1,8 @@
 #include "gtk.h"
 
 std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
-                                const int field[N][N]) {
+                                const int field[N][N],
+                                bool fromEstimate) {
   int i, j, es, x, y, k, l, _x, _y, end, fi, possible;
   int fill[N][N], after[N][N];
   std::vector<Info> ea;
@@ -54,6 +55,11 @@ std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
           l++;
         }
       }
+
+      // if (fromEstimate) {
+
+      // }
+      // else{
       fi = 0;
       end = recent.empty() ? 0 : 1;
       for (auto &e : recent) {
@@ -62,7 +68,9 @@ std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
           end = 0;
         }
       }
-      possible = fi == 0 ? InvalidValue : countPossible(after);
+      possible = !fromEstimate || fi == 0 ? countPossible(after) : InvalidValue;
+      // possible = fi == 0 ? countPossible(after) : InvalidValue;
+      // }
       ea.push_back(Info(i, j, es, l, end, possible, after));
     l183:;
     }
@@ -71,7 +79,7 @@ std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
 }
 
 std::vector<Info> possibleMoves(const Figure &f, const int field[N][N]) {
-  auto v = possibleMoves(f, {}, field);
+  auto v = possibleMoves(f, {}, field, true);
   for (auto &a : v) {
     a.countEstimate();
   }
@@ -232,10 +240,8 @@ std::string bestString() {
         vi.push_back(j % 100);
       }
 
-      std::vector<std::string> vs = {
-          fillString(N * N - vi[1]),
-          possibleString(vi[2], 1)
-      };
+      std::vector<std::string> vs = {fillString(N * N - vi[1]),
+                                     possibleString(vi[2], 1)};
       s += join(vs);
     }
     auto end = std::chrono::steady_clock::now();

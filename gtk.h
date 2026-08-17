@@ -42,16 +42,18 @@ const std::string SCREEN_DIR = "png";
 const int NF = -1;
 const bool DEBUG_MODE = NF != -1;
 
+//allow any number of moves 0-3
 const std::string fixed_field[] = {
-    R"(00010110
-10011000
-00011000
-11111000
-10100000
-11011101
-10110011
-10100100
-11 11-11 10 11-111 111 111
+    R"(11011101
+01011101
+01010000
+00011110
+00011111
+11011111
+10011110
+00001110
+111 111 111-111 001 001-10 11
+16_3
 )",
 
 };
@@ -1264,9 +1266,9 @@ void from_string(const std::string &s, int field[N][N], Figure figures[3]) {
   Glib::ustring data = s.substr(j + 1);
   Glib::ustring s1 = R"(([^-\n]+))";
   Glib::ustring s2 = "\\s*-\\s*";
-  Glib::ustring s3 = R"(\s+(\d{2})(?:\[\d+\])?_(\d))";
+  Glib::ustring s3 = R"((?:\s+(\d{2})(?:\[\d+\])?_(\d))?)";
   auto regex =
-      Glib::Regex::create(s1 + s2 + s1 + s2 + s1 + "(?:" + s3 + s3 + s3 + ")?");
+      Glib::Regex::create(s1 + s2 + s1 + s2 + s1  + s3 + s3 + s3 );
   Glib::MatchInfo match_info;
 
   std::string g, g1;
@@ -1280,7 +1282,7 @@ void from_string(const std::string &s, int field[N][N], Figure figures[3]) {
     from_string(g, figures[i]);
   }
   const int moves = (j - 4) / 2;
-  // std::cout << std::format("mc{} {} \n", j, moves);
+  std::cout << std::format("mc{} {} \n", j, moves);
   for (i = 0; i < moves; i++) {
     g = match_info.fetch(4 + 2 * i);  // index from 0 so -'0'
     g1 = match_info.fetch(5 + 2 * i); // g1[0] - '1' because index starts from 1
@@ -1404,16 +1406,12 @@ bool possibleH(const int field[N][N], int n) {
 int countPossible(const int field[N][N]) {
   int i, j;
   bool square3 = possibleSquare3(field), h5, v5;
-  std::cout << std::format("{} {} {}\n", square3, to_string(field), __LINE__);
   if (square3) {
-    std::cout << std::format(" {} {}\n", to_string(field), __LINE__);
     h5 = possibleV(field, 5);
     v5 = possibleH(field, 5);
-    std::cout << std::format("{} {}\n", h5, v5, __LINE__);
     return ALL_COUNT - 2 + (h5 ? 1 : possibleH(field, 4) - 1) +
            (v5 ? 1 : possibleV(field, 4) - 1);
   } else {
-    std::cout << std::format("else {}\n", __LINE__);
     i = 0, j = -1;
     for (auto &e : ALL_EXCEPT_DOT) {
       j++;

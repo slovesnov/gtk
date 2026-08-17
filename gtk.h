@@ -690,7 +690,7 @@ public:
           j++;
         }
 
-        // todo
+        s += "\n";
         auto v = possibleMoves(a, recent, field);
         std::sort(v.begin(), v.end());
         for (auto &e : v) {
@@ -761,17 +761,20 @@ public:
     for (const auto &e : m_figureStatistics)
       s += e.to_string(total, max);
 
-    auto elapsed = std::chrono::steady_clock::now() - gameBegin;
-    auto duration_sec =
-        std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
-    std::chrono::seconds sec{duration_sec};
+    // auto elapsed = std::chrono::steady_clock::now() - gameBegin;
+    // auto duration_sec =
+    //     std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+    // std::chrono::seconds sec{duration_sec};
 
-    vs = {std::format("figures {}", total),
-          std::format("squares {}", toString(squares, ',')),
-          // std::format("map {}/{}", m_figureStatistics.size(), 5 + 2 +
-          // MAP.size()),
-          fillString(f), possibleString(possible, 1),
-          std::format("time {:%T}{}", sec, startFromEmptyField ? "" : "*")};
+    vs = {
+        std::format("figures {}", total),
+        std::format("squares {}", toString(squares, ',')),
+        // std::format("map {}/{}", m_figureStatistics.size(), 5 + 2 +
+        // MAP.size()),
+        fillString(f),
+        possibleString(possible, 1),
+        // std::format("time {:%T}{}", sec, startFromEmptyField ? "" : "*")
+    };
     s += join(vs);
 
     s += possibleStatString();
@@ -779,8 +782,10 @@ public:
     s += se;
     m_out[0] = s;
     m_out[1] = bestString();
-    i = best.isInvalid() ? possible : best.estimate / 10000;
-    m_out[2] = possibleString(i, 2);
+    m_out[2] = std::format(
+        "{} now {}",
+        best.isInvalid() ? "" : possibleString(best.estimate / 10000, 2),
+        possibleString(possible, 2));
 
     if (!DEBUG_MODE && LOG && log) {
       addLog();
@@ -1186,7 +1191,6 @@ void make_move(int i, int j, const Figure &f, int field[N][N]) {
   for (_y = 0; _y < f.size(); _y++) {
     for (_x = 0; _x < f[_y].size(); _x++) {
       if (f[_y][_x]) {
-        printf("@");
         x = _x + i;
         y = _y + j;
         xa.insert(x);
@@ -1219,7 +1223,6 @@ void make_move(int i, int j, const Figure &f, int field[N][N]) {
       l++;
     }
   }
-
   copy(after, field);
 }
 

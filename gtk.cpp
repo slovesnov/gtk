@@ -1,8 +1,7 @@
 #include "gtk.h"
 
 std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
-                                const int field[N][N],
-                                bool fromEstimate) {
+                                const int field[N][N], bool fromEstimate) {
   int i, j, es, x, y, k, l, _x, _y, end, fi, possible;
   int fill[N][N], after[N][N];
   std::vector<Info> ea;
@@ -56,10 +55,6 @@ std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
         }
       }
 
-      // if (fromEstimate) {
-
-      // }
-      // else{
       fi = 0;
       end = recent.empty() ? 0 : 1;
       for (auto &e : recent) {
@@ -69,8 +64,6 @@ std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
         }
       }
       possible = !fromEstimate || fi == 0 ? countPossible(after) : InvalidValue;
-      // possible = fi == 0 ? countPossible(after) : InvalidValue;
-      // }
       ea.push_back(Info(i, j, es, l, end, possible, after));
     l183:;
     }
@@ -186,9 +179,64 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
   return r;
 }
 
+std::string gameTimeString() {
+  auto elapsed1 = std::chrono::steady_clock::now() - gameBegin;
+  auto duration_sec =
+      std::chrono::duration_cast<std::chrono::seconds>(elapsed1).count();
+  std::chrono::seconds sec{duration_sec};
+  return std::format("time {:%T}{}\n", sec, startFromEmptyField ? "" : "*");
+}
+
+bool same(int f1[N][N], int f2[N][N]) {
+  int i, j;
+  for (j = 0; j < N; j++) {
+    for (i = 0; i < N; i++) {
+      if (f1[j][i] != f2[j][i])
+        return false;
+    }
+  }
+  return true;
+}
+
+std::vector<VInt> permutations(int n) {
+  std::vector<VInt> r;
+  std::vector<int> arr(n);
+  std::iota(arr.begin(), arr.end(), 0);
+  int count = 0;
+  do {
+    count++;
+    r.push_back(arr);
+  } while (std::next_permutation(arr.begin(), arr.end()));
+  return r;
+}
+
+bool same(const VFigure &v, const int field[N][N]) {
+  int j = 0;
+  int t[N][N], a[N][N];
+  for (auto &p : permutations(v.size())) {
+    copy(field, t);
+    for (auto &i : p) {
+      make_move(best.gx(i), best.gy(i), v[i], t);
+    }
+    if (!j) {
+      printf("=\n");
+      copy(t, a);
+    } else {
+      printf("check\n");
+      if (!same(t, a)) {
+        printf("false\n");
+        return false;
+      }
+    }
+    j++;
+  }
+  printf("true\n");
+  return true;
+}
+
 std::string bestString() {
   VFigure v;
-  std::string s;
+  std::string s, so;
   int i, j;
   auto start = std::chrono::steady_clock::now();
   for (auto &a : figures) {
@@ -199,11 +247,10 @@ std::string bestString() {
 
   if (v.size() >= 1 && v.size() <= 3) {
     s = to_string(field) + to_string(v);
-    // std::cout<<to_string(v)<<"\n";
     auto &prev = previous[v.size()];
     if (s == prev.code) {
       best = prev.best;
-      return prev.out[1]; //+ "\nsame";
+      return prev.out[1] + "\n" + gameTimeString();
     }
     prev.code = s;
 
@@ -226,10 +273,13 @@ std::string bestString() {
     if (best.isInvalid()) {
       s = "always game over\n";
     } else {
+
       if (v.size() == 1) {
         best.n[0] = 0;
+      } else {
+        so = (same(v, field) ? "any order" : "order omportant") + std::string("\n");
       }
-      s = "";
+      s = so;
       for (i = 0; i < v.size(); i++) {
         s += best.ss(i, v.size() == 1) + "\n";
       }
@@ -247,10 +297,10 @@ std::string bestString() {
     auto end = std::chrono::steady_clock::now();
     auto elapsed =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    s += std::format("time {}ms\n", elapsed.count());
-    s += std::format("size {} {}", set2.size(), skipc2);
-
-    prev.out[1] = s;
+    s += std::format("time {}ms", elapsed.count());
+    prev.out[1] = s; // without game time
+    s += gameTimeString();
+    // s += std::format("size {} {}", set2.size(), skipc2);
     prev.best = best;
     return s;
   } else {

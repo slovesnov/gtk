@@ -39,7 +39,8 @@ const int N = 8;
 const std::string LOG_FILE = "log.txt";
 const std::string SCREEN_DIR = "png";
 
-const int NF = -1; //-1 normal mode
+const int NF = -1;
+const bool DEBUG_MODE = NF != -1;
 
 const std::string fixed_field[] = {R"(01011001
 11011101
@@ -71,11 +72,9 @@ const std::string fixed_field[] = {R"(01011001
     111 111 111 )"};
 
 static_assert(NF >= -1 && NF < int(std::size(fixed_field)));
-const bool DEBUG_MODE = NF != -1;
-const char BIGCORNER[] = "001 001 111";
 const std::unordered_map<std::string, std::string> MAP = {
     {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
-    {"101 111", "π"},  {"01 11", "corner"}, {BIGCORNER, "CORNER"}};
+    {"101 111", "π"},  {"01 11", "corner"}, {"001 001 111", "CORNER"}};
 const int DX = 763 - 852;
 const int DY = 347 - 202;
 const int DX1 = 743 - 763;
@@ -110,7 +109,6 @@ std::chrono::steady_clock::time_point gameBegin;
 const int ALL_COUNT = 39;
 const int InvalidValue = -1;
 bool startFromEmptyField = 0;
-VInt bigCorner;
 VPIntInt fillStatistics, possibleStatistics;
 
 void copy(const int source[N][N], int dest[N][N]);
@@ -407,10 +405,6 @@ public:
             s = to_string(f);
             if (!set.contains(s)) {
               set.insert(s);
-              if (key == BIGCORNER) {
-                // std::cout<< to_string(f)<<" " <<k<<"\n";
-                bigCorner.push_back(k);
-              }
               ALL_EXCEPT_DOT[k++] = {f, s};
             }
           }
@@ -1374,38 +1368,13 @@ bool possibleH(const int field[N][N], int n) {
 
 int countPossible(const int field[N][N]) {
   int i, j;
-  bool square3 = possibleSquare3(field), h5, v5, r23, r32;
+  bool square3 = possibleSquare3(field), h5, v5;
   if (square3) {
     h5 = possibleV(field, 5);
     v5 = possibleH(field, 5);
     return ALL_COUNT - 2 + (h5 ? 1 : possibleH(field, 4) - 1) +
            (v5 ? 1 : possibleV(field, 4) - 1);
   } else {
-    if (r23 && r32) {
-      h5 = possibleV(field, 5);
-      v5 = possibleH(field, 5);
-      j = -1 - bigCorner.size();
-      for (auto &a : bigCorner) {
-        j += hasPossibleMoves(ALL_EXCEPT_DOT[a].figure, field);
-      }
-      j += ALL_COUNT - 2 + (h5 ? 1 : possibleH(field, 4) - 1) +
-           (v5 ? 1 : possibleV(field, 4) - 1);
-
-      i = 0, j = -1;
-      for (auto &e : ALL_EXCEPT_DOT) {
-        j++;
-        if (j && hasPossibleMoves(e.figure, field)) {
-          i++;
-        }
-      }
-      if (j == i + 1) {
-        printf("=");
-      } else {
-        printf("!=");
-        throw 0;
-      }
-      return i + 1;
-    }
     i = 0, j = -1;
     for (auto &e : ALL_EXCEPT_DOT) {
       j++;

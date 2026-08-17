@@ -62,7 +62,7 @@ std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
           end = 0;
         }
       }
-      possible = fi == 0 ? countPossible(after) : -1;
+      possible = fi == 0 ? countPossible(after) : InvalidValue;
       ea.push_back(Info(i, j, es, l, end, possible, after));
     l183:;
     }

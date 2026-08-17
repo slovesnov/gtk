@@ -29,19 +29,19 @@ using Figure = std::vector<VInt>;
 using VFigure = std::vector<Figure>;
 using VPIntInt = std::vector<std::pair<int, int>>;
 
-int debug = 0;
+int timer = 1;
 int saveText = 0;
 const bool LOG = 1;
 const int TIMER_MILLISECONDS = 500; // 800
 const int SAVE_TIMER_MILLISECONDS = 3000;
-const int NT = 2;
+const int NT = 3;
 const int N = 8;
 const std::string LOG_FILE = "log.txt";
 const std::string SCREEN_DIR = "png";
 
-const int NF = 0;
+const int NF = -1; //-1 normal mode
 
-const std::string fixed_field[] = {"", R"(01011001
+const std::string fixed_field[] = {R"(01011001
 11011101
 00111000
 00111111
@@ -70,8 +70,8 @@ const std::string fixed_field[] = {"", R"(01011001
     1 -
     111 111 111 )"};
 
-static_assert(NF >= 0 && NF < std::size(fixed_field));
-const bool DEBUG_MODE = !fixed_field[NF].empty();
+static_assert(NF >= -1 && NF < int(std::size(fixed_field)));
+const bool DEBUG_MODE = NF != -1;
 
 const std::unordered_map<std::string, std::string> MAP = {
     {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
@@ -107,8 +107,6 @@ VInt figureIndex;
 uint32_t *gp;
 std::vector<uint8_t> gbuffer;
 std::chrono::steady_clock::time_point gameBegin;
-class MyWindow;
-MyWindow *pWindow;
 const int ALL_COUNT = 39;
 const int InvalidValue = -1;
 bool startFromEmptyField = 0;
@@ -128,6 +126,8 @@ void from_string(const std::string &s, int field[N][N], Figure figures[3]);
 void from_string(const std::string &s, Figure &f);
 std::string toString(int t, char separator = ' ', int digits = 3);
 std::string savePng();
+Figure rotate(const Figure &matrix);
+Figure invertFigure(const Figure &a, bool x, bool y);
 // #define USE_MASK
 
 struct HFigure {
@@ -206,7 +206,9 @@ struct Info {
   std::string to_string() {
     return std::format(
         "{}{}{}{}{}→{} ", x, y, lines ? '[' + std::to_string(lines) + ']' : "",
-        end ? "e" : "", possibleString(possibleAfter, 0), estimate);
+        end ? "e" : "",
+        possibleAfter == InvalidValue ? "" : possibleString(possibleAfter, 0),
+        estimate);
   }
   bool operator<(const Info &i) const {
     if (end != i.end) {
@@ -280,40 +282,37 @@ std::string code(const Figure &a);
 std::string to_string(const int field[N][N]);
 std::string to_string(const VFigure &vf);
 std::string to_string(const Figure &a, int o = 1);
-void init();
 std::string bestString();
-void newGame();
 
 class MyWindow : public Gtk::Window {
 public:
   MyWindow()
-      : m_buttonSave(SAVE_PNG), m_buttonSaveText(SAVE_TEXT), m_buttonDebug() {
+      : m_buttonSave(SAVE_PNG), m_buttonSaveText(SAVE_TEXT), m_buttonTimer() {
     int i;
 
-    pWindow = this;
+    set_resizable(false);
     m_title = std::format("gtkmm {}.{}.{}", GTKMM_MAJOR_VERSION,
                           GTKMM_MINOR_VERSION, GTKMM_MICRO_VERSION);
     set_title(m_title);
     set_icon_name("app-icon");
-    // std::string css_data = "textview {"
-    //                        "  font-family: 'Monospace', monospace;"
-    //                        "  font-size: 16px;"
-    //                        "}";
-    std::string css_data = "textview {"
-                           "  font-family: 'Times New Roman';"
-                           "  font-size: 14px;"
-                           "}";
     for (i = 0; i < NT; i++) {
-      // width 320
-      if (i == 0)
-        m_scrolled_window[i].set_size_request(200, 700);
-      else {
-        m_scrolled_window[i].set_vexpand(true);
+      if (i == 2) {
+        m_text_view[i].set_valign(Gtk::Align::START);
+      } else {
+        m_scrolled_window[i].set_child(m_text_view[i]);
+        m_scrolled_window[i].set_policy(Gtk::PolicyType::AUTOMATIC,
+                                        Gtk::PolicyType::AUTOMATIC);
+        if (i == 0)
+          m_scrolled_window[i].set_size_request(200, 700);
+        else {
+          m_scrolled_window[i].set_vexpand(true);
+        }
       }
-      m_scrolled_window[i].set_child(m_text_view[i]);
-      m_scrolled_window[i].set_policy(Gtk::PolicyType::AUTOMATIC,
-                                      Gtk::PolicyType::AUTOMATIC);
 
+      std::string css_data = std::format(R"(textview {{
+        font-family: 'Times New Roman';
+        font-size: 14px;
+      }})");
       auto css_provider = Gtk::CssProvider::create();
       css_provider->load_from_data(css_data);
       m_text_view[i].get_style_context()->add_provider(
@@ -324,11 +323,10 @@ public:
     auto box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
     box->append(m_buttonSave);
     box->append(m_buttonSaveText);
-    box->append(m_buttonDebug);
+    box->append(m_buttonTimer);
+    box->append(m_text_view[2]);
     box->append(m_drawing_area);
     box->append(m_scrolled_window[1]);
-    if (NT > 2)
-      box->append(m_scrolled_window[2]);
 
     auto box1 = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL);
     box1->append(m_scrolled_window[0]);
@@ -349,16 +347,98 @@ public:
       m_buttonSaveText.set_label("waiting...");
     });
 
-    m_buttonDebug.signal_clicked().connect([this]() {
-      debug = !debug;
-      setDebugButtonText();
+    m_buttonTimer.signal_clicked().connect([this]() {
+      timer = !timer;
+      setButtonTimerText();
     });
 
-    setDebugButtonText();
+    setButtonTimerText();
     init();
 
-    Glib::signal_timeout().connect(sigc::mem_fun(*this, &MyWindow::timer),
+    Glib::signal_timeout().connect(sigc::mem_fun(*this, &MyWindow::tick),
                                    TIMER_MILLISECONDS);
+  }
+
+  void newGame() {
+    gameBegin = std::chrono::steady_clock::now();
+    best.setInvalid();
+    fillStatistics.clear();
+    possibleStatistics.clear();
+    m_figureStatistics.clear();
+  }
+
+  void init() {
+    VString vs;
+    int x, y, i, j;
+    std::string s, key;
+    std::set<std::string> set;
+
+    /*first square3 & lines5 for possible figures after, dot is ignored*/
+
+    // square
+    for (i = 3; i >= 2; i--) {
+      key = s = std::string(i, '1');
+      for (j = 0; j < i - 1; j++) {
+        key += ' ' + s;
+      }
+      vs.push_back(key);
+
+      if (i == 3) {
+        // line
+        for (j = 5; j >= 2; j--) {
+          key = std::string(j, '1');
+          vs.push_back(key);
+        }
+      }
+    }
+
+    // ugly
+    for (const auto &[key, value] : MAP) {
+      vs.push_back(key);
+    }
+
+    int k = 0;
+    Figure a;
+    for (const auto &key : vs) {
+      from_string(key, a);
+      set.clear();
+      auto r = rotate(a);
+      for (x = 0; x < 2; x++) {
+        for (y = 0; y < 2; y++) {
+          for (i = 0; i < 2; i++) {
+            auto f = invertFigure(i ? r : a, x, y);
+            s = to_string(f);
+            if (!set.contains(s)) {
+              set.insert(s);
+              ALL_EXCEPT_DOT[k++] = {f, s
+#ifdef MASK
+                                     ,
+                                     0
+#endif
+              };
+            }
+          }
+        }
+      }
+    }
+
+#ifdef USE_MASK
+    for (auto &a : ALL_EXCEPT_DOT) {
+      uint64_t &m = a.mask;
+      m = 0;
+      for (i = 0; i < ALL_COUNT - 1; i++) {
+        if (subFigure(a.figure, ALL_EXCEPT_DOT[i].figure)) {
+          m |= (1 << i);
+        }
+      }
+    }
+#endif
+
+    if (LOG)
+      std::filesystem::create_directories("./" + SCREEN_DIR);
+
+    InvalidInfo.setInvalid();
+    newGame();
   }
 
   void setColor(const Cairo::RefPtr<Cairo::Context> &cr, int i) {
@@ -453,15 +533,9 @@ public:
                 s += std::to_string(a + 1);
               }
             }
-            draw_text(cr, cx, cy, s, 0);
+            draw_text(cr, cx, cy, s);
           }
         }
-      }
-
-      
-      i = best.estimate/10000;
-      if (i != 39) {
-        draw_text(cr, 0, 0, std::to_string(i), 1);
       }
     }
 
@@ -477,12 +551,13 @@ public:
   }
 
   void draw_text(const Cairo::RefPtr<Cairo::Context> &cr, int square_x,
-                 int square_y, std::string text, int o) {
+                 int square_y, std::string text) {
+    const int Q = DRAW_AREA_SQUARE;
 
     Pango::FontDescription font_desc;
     font_desc.set_family("Times New Roman");
     font_desc.set_weight(Pango::Weight::BOLD);
-    int current_pixel_size = o == 1 ? 36 : DRAW_AREA_SQUARE;
+    int current_pixel_size = Q;
     const int min_pixel_size = 6;
     int text_width;
     int text_height;
@@ -493,22 +568,21 @@ public:
       layout->set_font_description(font_desc);
       layout->set_text(text);
       layout->get_pixel_size(text_width, text_height);
-      if (o ||
-          text_width <= DRAW_AREA_SQUARE && text_height <= DRAW_AREA_SQUARE) {
+      if (text_width <= Q && text_height <= Q) {
         break;
       }
       current_pixel_size--;
     }
 
-    double text_x = square_x + (DRAW_AREA_SQUARE * (o + 1) - text_width) / 2.0;
-    double text_y = square_y + (DRAW_AREA_SQUARE * (o + 1) - text_height) / 2.0;
+    double text_x = square_x + (Q - text_width) / 2.0;
+    double text_y = square_y + (Q - text_height) / 2.0;
     cr->set_source_rgb(0, 0, 0);
     cr->move_to(text_x, text_y);
     layout->show_in_cairo_context(cr);
   }
 
-  void setDebugButtonText() {
-    m_buttonDebug.set_label(debug ? "debug:on" : "debug:off");
+  void setButtonTimerText() {
+    m_buttonTimer.set_label((timer ? "stop" : "start") + std::string(" timer"));
   }
 
   void updateSaveButton(std::string s) {
@@ -540,22 +614,24 @@ public:
     file.close();
   }
 
-  bool timer() {
+  bool tick() {
     int i;
-    if (DEBUG_MODE) {
-      from_string(fixed_field[NF], field, figures);
-      m_out[1] = bestString();
-      m_drawing_area.queue_draw();
-    } else {
-      gets();
-      if (saveText) {
-        addLog();
-        saveText = 0;
-        m_buttonSaveText.set_label(SAVE_TEXT);
+    if (timer) {
+      if (DEBUG_MODE) {
+        from_string(fixed_field[NF], field, figures);
+        m_out[1] = bestString();
+        m_drawing_area.queue_draw();
+      } else {
+        gets();
+        if (saveText) {
+          addLog();
+          saveText = 0;
+          m_buttonSaveText.set_label(SAVE_TEXT);
+        }
       }
-    }
-    for (i = 0; i < NT; i++) {
-      m_text_view[i].get_buffer()->set_text(m_out[i]);
+      for (i = 0; i < NT; i++) {
+        m_text_view[i].get_buffer()->set_text(m_out[i]);
+      }
     }
     return !DEBUG_MODE;
   }
@@ -584,6 +660,8 @@ public:
       m_out[0] = s;
       return;
     }
+    m_drawing_area.queue_draw();
+
     i = 0;
     for (auto &a : figures) {
       if (a.empty()) {
@@ -623,7 +701,6 @@ public:
         }
         s2 = s1;
         s1 += " ";
-        // s1 += "\n";
         s += s1;
         VFigure recent;
         j = 0;
@@ -719,10 +796,12 @@ public:
     s += fillStatString();
     m_out[0] = s;
     m_out[1] = bestString();
+    i = best.isInvalid() ? possible : best.estimate / 10000;
+    m_out[2] = possibleString(i, 2);
 
     if (!DEBUG_MODE && LOG && log) {
       addLog();
-      savePng();
+      // savePng();
     }
   }
 
@@ -741,7 +820,7 @@ public:
   Gtk::ScrolledWindow m_scrolled_window[NT];
   Gtk::TextView m_text_view[NT];
   std::string m_out[NT];
-  Gtk::Button m_buttonSave, m_buttonSaveText, m_buttonDebug;
+  Gtk::Button m_buttonSave, m_buttonSaveText, m_buttonTimer;
   Gtk::DrawingArea m_drawing_area;
   std::string m_prev, m_prevfields;
   std::vector<FigureStatistics> m_figureStatistics;
@@ -832,9 +911,9 @@ std::string savePng() {
 
   if (pixbuf) {
     try {
-      s = "./" + SCREEN_DIR + '/' + dateTimeString() + ".png";
-
-      pixbuf->save(s, "png", {"compression"}, // Вектор имен опций
+      s = dateTimeString() + ".png";
+      pixbuf->save("./" + SCREEN_DIR + '/' + s, "png",
+                   {"compression"}, // Вектор имен опций
                    {"9"} // Вектор значений опций (максимальное сжатие)
       );
       // auto end = std::chrono::steady_clock::now();
@@ -994,8 +1073,6 @@ std::string get_screenshot_winapi() {
     }
     b += SX;
   }
-  pWindow->m_drawing_area.queue_draw();
-
   return "";
 }
 
@@ -1229,80 +1306,6 @@ bool subFigure(const Figure &inner, const Figure &outer) {
 }
 #endif
 
-void init() {
-  VString vs;
-  int x, y, i, j;
-  std::string s, key;
-  std::set<std::string> set;
-
-  /*first square3 & lines5 for possible figures after, dot is ignored*/
-
-  // square
-  for (i = 3; i >= 2; i--) {
-    key = s = std::string(i, '1');
-    for (j = 0; j < i - 1; j++) {
-      key += ' ' + s;
-    }
-    vs.push_back(key);
-
-    if (i == 3) {
-      // line
-      for (j = 5; j >= 2; j--) {
-        key = std::string(j, '1');
-        vs.push_back(key);
-      }
-    }
-  }
-
-  // ugly
-  for (const auto &[key, value] : MAP) {
-    vs.push_back(key);
-  }
-
-  int k = 0;
-  Figure a;
-  for (const auto &key : vs) {
-    from_string(key, a);
-    set.clear();
-    auto r = rotate(a);
-    for (x = 0; x < 2; x++) {
-      for (y = 0; y < 2; y++) {
-        for (i = 0; i < 2; i++) {
-          auto f = invertFigure(i ? r : a, x, y);
-          s = to_string(f);
-          if (!set.contains(s)) {
-            set.insert(s);
-            ALL_EXCEPT_DOT[k++] = {f, s
-#ifdef MASK
-                                   ,
-                                   0
-#endif
-            };
-          }
-        }
-      }
-    }
-  }
-
-#ifdef USE_MASK
-  for (auto &a : ALL_EXCEPT_DOT) {
-    uint64_t &m = a.mask;
-    m = 0;
-    for (i = 0; i < ALL_COUNT - 1; i++) {
-      if (subFigure(a.figure, ALL_EXCEPT_DOT[i].figure)) {
-        m |= (1 << i);
-      }
-    }
-  }
-#endif
-
-  if (LOG)
-    std::filesystem::create_directories("./" + SCREEN_DIR);
-
-  InvalidInfo.setInvalid();
-  newGame();
-}
-
 std::string code(const Figure &a) {
   int x, y, i;
   auto r = rotate(a);
@@ -1436,9 +1439,6 @@ int countPossible(const int field[N][N]) {
 }
 
 std::string possibleString(int i, const int o) {
-  // if (i == -1) {
-  //   return "";
-  // }
   auto d = (1 - std::pow(1 - double(i) / ALL_COUNT, 3)) * 100;
   if (o == 0)
     return std::format(" {} {:.0f}%", i, d);
@@ -1469,14 +1469,6 @@ std::string join(const VString &vs) {
     s += a + '\n';
   }
   return s;
-}
-
-void newGame() {
-  gameBegin = std::chrono::steady_clock::now();
-  best.setInvalid();
-  fillStatistics.clear();
-  possibleStatistics.clear();
-  pWindow->m_figureStatistics.clear();
 }
 
 std::string possibleStatString() {

@@ -42,34 +42,19 @@ const std::string SCREEN_DIR = "png";
 const int NF = -1;
 const bool DEBUG_MODE = NF != -1;
 
-const std::string fixed_field[] = {R"(01011001
+const std::string fixed_field[] = {
+    R"(00010110
+10011000
+00011000
+11111000
+10100000
 11011101
-00111000
-00111111
-00000000
-10011101
-10010100
-00001000
-101 111-111 111 111-10 11
-02[1]_3
-23_1
-52_2
+10110011
+10100100
+11 11-11 10 11-111 111 111
 )",
 
-                                   R"(00010000
-01011110
-00011111
-00000000
-11100011
-11010111
-11010111
-10010110
-10 11 01-111 111 111-111 111 111)",
-
-                                   R"(00000000
-    11101001 11100001 10000001 11010000 11100000 00110000 10100011 111 111 111 -
-    1 -
-    111 111 111 )"};
+};
 
 static_assert(NF >= -1 && NF < int(std::size(fixed_field)));
 const std::unordered_map<std::string, std::string> MAP = {
@@ -921,14 +906,14 @@ Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int o) {
       reinterpret_cast<uint8_t *>(gp) + (crop_y * rowstride) + (crop_x * 4);
 
   return Gdk::Pixbuf::create_from_data(
-             crop_start_ptr,       // Указатель на первый пиксель кропа
-             Gdk::Colorspace::RGB, // Цветовое пространство
-             true,                 // Наличие альфа-канала (has_alpha)
-             8,                    // Глубина цвета (bits_per_sample)
-             crop_w,               // Ширина кропа
-             crop_h,               // Высота кропа
-             rowstride             // Шаг строки исходного (!) буфера
-         );
+      crop_start_ptr,       // Указатель на первый пиксель кропа
+      Gdk::Colorspace::RGB, // Цветовое пространство
+      true,                 // Наличие альфа-канала (has_alpha)
+      8,                    // Глубина цвета (bits_per_sample)
+      crop_w,               // Ширина кропа
+      crop_h,               // Высота кропа
+      rowstride             // Шаг строки исходного (!) буфера
+  );
 }
 
 std::string savePng() {
@@ -1309,6 +1294,10 @@ void from_string(const std::string &s, int field[N][N], Figure figures[3]) {
       figures[i].clear();
     }
   }
+
+  // i = countPossible(field);
+  // std::cout << i << "#\n";
+  // exit(1);
 }
 
 #ifdef MASK
@@ -1389,10 +1378,10 @@ bool possibleRectange(int i, int j, const int field[N][N], int w, int h) {
 }
 
 bool possibleRectange(const int field[N][N], int w, int h) {
-  int i, j;
-  for (j = 0; j <= N - w; j++) {
-    for (i = 0; i <= N - h; i++) {
-      if (possibleRectange(i, j, field, w, h)) {
+  int x, y;
+  for (x = 0; x <= N - w; x++) {
+    for (y = 0; y <= N - h; y++) {
+      if (possibleRectange(x, y, field, w, h)) {
         return true;
       }
     }
@@ -1415,12 +1404,16 @@ bool possibleH(const int field[N][N], int n) {
 int countPossible(const int field[N][N]) {
   int i, j;
   bool square3 = possibleSquare3(field), h5, v5;
+  std::cout << std::format("{} {} {}\n", square3, to_string(field), __LINE__);
   if (square3) {
+    std::cout << std::format(" {} {}\n", to_string(field), __LINE__);
     h5 = possibleV(field, 5);
     v5 = possibleH(field, 5);
+    std::cout << std::format("{} {}\n", h5, v5, __LINE__);
     return ALL_COUNT - 2 + (h5 ? 1 : possibleH(field, 4) - 1) +
            (v5 ? 1 : possibleV(field, 4) - 1);
   } else {
+    std::cout << std::format("else {}\n", __LINE__);
     i = 0, j = -1;
     for (auto &e : ALL_EXCEPT_DOT) {
       j++;

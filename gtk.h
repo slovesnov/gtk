@@ -110,6 +110,7 @@ const int ALL_COUNT = 39;
 const int InvalidValue = -1;
 bool startFromEmptyField = 0;
 VPIntInt fillStatistics, possibleStatistics;
+std::filesystem::path app_dir;
 
 void copy(const int source[N][N], int dest[N][N]);
 std::string possibleString(int possible, int o);
@@ -280,9 +281,9 @@ std::string to_string(const VFigure &vf);
 std::string to_string(const Figure &a, int o = 1);
 std::string bestString();
 
-class MyWindow : public Gtk::Window {
+class Window : public Gtk::Window {
 public:
-  MyWindow()
+  Window()
       : m_buttonSave(SAVE_PNG), m_buttonSaveText(SAVE_TEXT), m_buttonTimer() {
     int i;
 
@@ -290,7 +291,16 @@ public:
     m_title = std::format("gtkmm {}.{}.{}", GTKMM_MAJOR_VERSION,
                           GTKMM_MINOR_VERSION, GTKMM_MICRO_VERSION);
     set_title(m_title);
-    set_icon_name("app-icon");
+
+    auto display = Gdk::Display::get_default();
+    auto icon_theme = Gtk::IconTheme::get_for_display(display);
+    icon_theme->add_search_path(app_dir.string());
+
+    // 4. Устанавливаем имя иконки (БЕЗ расширения файла)
+    // Если файл называется "app_icon.png", передаем просто "app_icon"
+    set_icon_name("app");
+    // set_icon_name("app-icon");
+
     for (i = 0; i < NT; i++) {
       if (i == 2) {
         m_text_view[i].set_valign(Gtk::Align::START);
@@ -304,15 +314,6 @@ public:
           m_scrolled_window[i].set_vexpand(true);
         }
       }
-
-      std::string css_data = std::format(R"(textview {{
-        font-family: 'Times New Roman';
-        font-size: 14px;
-      }})");
-      auto css_provider = Gtk::CssProvider::create();
-      css_provider->load_from_data(css_data);
-      m_text_view[i].get_style_context()->add_provider(
-          css_provider, GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
       m_text_view[i].set_wrap_mode(Gtk::WrapMode::WORD);
     }
 
@@ -333,7 +334,7 @@ public:
     m_drawing_area.set_vexpand(false);
     m_drawing_area.set_content_width(DRAW_AREA_SQUARE * N);
     m_drawing_area.set_content_height(DRAW_AREA_SQUARE * N);
-    m_drawing_area.set_draw_func(sigc::mem_fun(*this, &MyWindow::on_draw));
+    m_drawing_area.set_draw_func(sigc::mem_fun(*this, &Window::on_draw));
 
     m_buttonSave.signal_clicked().connect(
         [this]() { updateSaveButton(savePng()); });
@@ -351,7 +352,7 @@ public:
     setButtonTimerText();
     init();
 
-    Glib::signal_timeout().connect(sigc::mem_fun(*this, &MyWindow::tick),
+    Glib::signal_timeout().connect(sigc::mem_fun(*this, &Window::tick),
                                    TIMER_MILLISECONDS);
   }
 
@@ -819,14 +820,24 @@ int main(int argc, char *argv[]) {
   auto app = Gtk::Application::create("com.example.myapp"
                                       // ,  Gio::Application::Flags::NON_UNIQUE
   );
-  app->signal_startup().connect([app]() {
-    auto display = Gdk::Display::get_default();
-    if (display) {
-      auto icon_theme = Gtk::IconTheme::get_for_display(display);
-      icon_theme->add_resource_path("/com/example/myapp");
+  app->signal_startup().connect([app, argv]() {
+    app_dir = std::filesystem::absolute(argv[0]).parent_path();
+    std::string css_path = (app_dir / "style.css").string();
+    auto css_provider = Gtk::CssProvider::create();
+    try {
+      css_provider->load_from_path(css_path);
+
+      auto display = Gdk::Display::get_default();
+
+      Gtk::StyleContext::add_provider_for_display(
+          display, css_provider, GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    } catch (const Gtk::CssParserError &ex) {
+      std::cerr << "cann't parse CSS: " << ex.what() << std::endl;
+    } catch (const Glib::FileError &ex) {
+      std::cerr << "error file reading: " << ex.what() << std::endl;
     }
   });
-  return app->make_window_and_run<MyWindow>(argc, argv);
+  return app->make_window_and_run<Window>(argc, argv);
 }
 
 PointInfo getBase(int sx, int width, int sy, int height, int o) {
@@ -863,9 +874,12 @@ int colorDifference(uint32_t c1, uint32_t c2) {
   return r;
 }
 
-void copy(const int source[N][N], int dest[N][N]) {
-  for (int i = 0; i < N; ++i)
-    std::copy(source[i], source[i] + N, dest[i]);
+bool same(int f1[N][N], int f2[N][N]) {
+  return std::equal(&f1[0][0], &f1[0][0] + N * N, &f2[0][0]);
+}
+
+void copy(const int src[N][N], int dest[N][N]) {
+  std::copy(&src[0][0], &src[0][0] + N * N, &dest[0][0]);
 }
 
 // o=1 for debug outputs
@@ -1182,7 +1196,7 @@ void from_string(const std::string &s, Figure &f) {
   f.push_back(v);
 }
 
-//returns false if move impossible
+// returns false if move impossible
 bool make_move(int i, int j, const Figure &f, int field[N][N]) {
   int _x, _y, x, y, l;
   int fill[N][N], after[N][N];
@@ -1195,7 +1209,6 @@ bool make_move(int i, int j, const Figure &f, int field[N][N]) {
         x = _x + i;
         y = _y + j;
         if (field[y][x]) {
-          std::cout<<std::format("er {} {}, {} {}, {}\n" ,x, y,_x,_y,to_string(f));
           return false;
         }
         xa.insert(x);
@@ -1263,7 +1276,7 @@ void from_string(const std::string &s, int field[N][N], Figure figures[3]) {
     from_string(g, figures[i]);
   }
   const int moves = (j - 4) / 2;
-  //std::cout << std::format("mc{} {} \n", j, moves);
+  // std::cout << std::format("mc{} {} \n", j, moves);
   for (i = 0; i < moves; i++) {
     g = match_info.fetch(4 + 2 * i);  // index from 0 so -'0'
     g1 = match_info.fetch(5 + 2 * i); // g1[0] - '1' because index starts from 1

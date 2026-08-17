@@ -216,21 +216,19 @@ bool same(const VFigure &v, const int field[N][N]) {
   for (auto &p : permutations(v.size())) {
     copy(field, t);
     for (auto &i : p) {
-      make_move(best.gx(i), best.gy(i), v[i], t);
-    }
-    if (!j) {
-      printf("=\n");
-      copy(t, a);
-    } else {
-      printf("check\n");
-      if (!same(t, a)) {
-        printf("false\n");
+      if(!make_move(best.gx(i), best.gy(i), v[i], t)){
         return false;
       }
     }
+    if (j) {
+      if (!same(t, a)) {
+        return false;
+      }
+    } else {
+      copy(t, a);
+    }
     j++;
   }
-  printf("true\n");
   return true;
 }
 
@@ -277,7 +275,7 @@ std::string bestString() {
       if (v.size() == 1) {
         best.n[0] = 0;
       } else {
-        so = (same(v, field) ? "any order" : "order omportant") + std::string("\n");
+        so = (same(v, field) ? "any order" : "order important") + std::string("\n");
       }
       s = so;
       for (i = 0; i < v.size(); i++) {

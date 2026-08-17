@@ -1182,7 +1182,8 @@ void from_string(const std::string &s, Figure &f) {
   f.push_back(v);
 }
 
-void make_move(int i, int j, const Figure &f, int field[N][N]) {
+//returns false if move impossible
+bool make_move(int i, int j, const Figure &f, int field[N][N]) {
   int _x, _y, x, y, l;
   int fill[N][N], after[N][N];
   std::set<int> xa, ya;
@@ -1193,6 +1194,9 @@ void make_move(int i, int j, const Figure &f, int field[N][N]) {
       if (f[_y][_x]) {
         x = _x + i;
         y = _y + j;
+        if (field[y][x]) {
+          return false;
+        }
         xa.insert(x);
         ya.insert(y);
         fill[y][x] = 1;
@@ -1224,6 +1228,7 @@ void make_move(int i, int j, const Figure &f, int field[N][N]) {
     }
   }
   copy(after, field);
+  return true;
 }
 
 void from_string(const std::string &s, int field[N][N], Figure figures[3]) {
@@ -1257,7 +1262,7 @@ void from_string(const std::string &s, int field[N][N], Figure figures[3]) {
     from_string(g, figures[i]);
   }
   const int moves = (j - 4) / 2;
-  std::cout << std::format("mc{} {} \n", j, moves);
+  //std::cout << std::format("mc{} {} \n", j, moves);
   for (i = 0; i < moves; i++) {
     g = match_info.fetch(4 + 2 * i);  // index from 0 so -'0'
     g1 = match_info.fetch(5 + 2 * i); // g1[0] - '1' because index starts from 1

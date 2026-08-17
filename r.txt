@@ -5,7 +5,7 @@ clear && g++ -std=c++23 gtk.cpp app.res `pkg-config gtkmm-4.0 --cflags --libs` -
 ctrl+u = clear command line input text
 ctrl+l = clear (cls)
 
-need only ico file can be big
+need only ico file. It can be big
 windres app.rc -O coff -o app.res
 
 icon path

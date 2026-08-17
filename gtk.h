@@ -27,6 +27,7 @@ using VString = std::vector<std::string>;
 using VInt = std::vector<int>;
 using Figure = std::vector<VInt>;
 using VFigure = std::vector<Figure>;
+using VPIntInt = std::vector<std::pair<int, int>>;
 
 int debug = 0;
 int saveText = 0;
@@ -110,10 +111,8 @@ class MyWindow;
 MyWindow *pWindow;
 const int ALL_COUNT = 39;
 const int InvalidValue = -1;
-std::string hs;
-int possibleStat[ALL_COUNT + 1];
 bool startFromEmptyField = 0;
-std::vector<std::pair<int, int>> fillStatistics;
+VPIntInt fillStatistics, possibleStatistics;
 
 void copy(const int source[N][N], int dest[N][N]);
 std::string possibleString(int possible, int o);
@@ -454,9 +453,15 @@ public:
                 s += std::to_string(a + 1);
               }
             }
-            draw_text(cr, cx, cy, s);
+            draw_text(cr, cx, cy, s, 0);
           }
         }
+      }
+
+      
+      i = best.estimate/10000;
+      if (i != 39) {
+        draw_text(cr, 0, 0, std::to_string(i), 1);
       }
     }
 
@@ -472,12 +477,12 @@ public:
   }
 
   void draw_text(const Cairo::RefPtr<Cairo::Context> &cr, int square_x,
-                 int square_y, std::string &text) {
+                 int square_y, std::string text, int o) {
 
     Pango::FontDescription font_desc;
     font_desc.set_family("Times New Roman");
     font_desc.set_weight(Pango::Weight::BOLD);
-    int current_pixel_size = DRAW_AREA_SQUARE;
+    int current_pixel_size = o == 1 ? 36 : DRAW_AREA_SQUARE;
     const int min_pixel_size = 6;
     int text_width;
     int text_height;
@@ -488,14 +493,15 @@ public:
       layout->set_font_description(font_desc);
       layout->set_text(text);
       layout->get_pixel_size(text_width, text_height);
-      if (text_width <= DRAW_AREA_SQUARE && text_height <= DRAW_AREA_SQUARE) {
+      if (o ||
+          text_width <= DRAW_AREA_SQUARE && text_height <= DRAW_AREA_SQUARE) {
         break;
       }
       current_pixel_size--;
     }
 
-    double text_x = square_x + (DRAW_AREA_SQUARE - text_width) / 2.0;
-    double text_y = square_y + (DRAW_AREA_SQUARE - text_height) / 2.0;
+    double text_x = square_x + (DRAW_AREA_SQUARE * (o + 1) - text_width) / 2.0;
+    double text_y = square_y + (DRAW_AREA_SQUARE * (o + 1) - text_height) / 2.0;
     cr->set_source_rgb(0, 0, 0);
     cr->move_to(text_x, text_y);
     layout->show_in_cairo_context(cr);
@@ -552,6 +558,16 @@ public:
       m_text_view[i].get_buffer()->set_text(m_out[i]);
     }
     return !DEBUG_MODE;
+  }
+
+  void addStatistics(VPIntInt &v, int i) {
+    auto it =
+        std::find_if(v.begin(), v.end(), [&i](auto x) { return x.first == i; });
+    if (it == v.end()) {
+      v.push_back({i, 1});
+    } else {
+      it->second++;
+    }
   }
 
   void gets() {
@@ -630,6 +646,7 @@ public:
     }
     f = countFill(field);
     fields = to_string(field);
+    int possible = countPossible(field);
 
     i = std::count_if(vs.begin(), vs.end(), [](auto e) { return !e.empty(); });
 
@@ -643,20 +660,9 @@ public:
         m_prev = s1;
         m_prevfields = fields;
         log = 1;
+        addStatistics(possibleStatistics, possible);
+        addStatistics(fillStatistics, f);
 
-        possibleStat[countPossible(field)]++;
-
-        auto it = std::find_if(fillStatistics.begin(), fillStatistics.end(),
-                               [&f](auto x) { return x.first == f; });
-        if (it == fillStatistics.end()) {
-          fillStatistics.push_back({f, 1});
-        } else {
-          it->second++;
-        }
-
-        // if (f == 0) {
-        //   m_figureStatistics.clear();
-        // }
         i = 0;
         std::string cd, mincode;
         for (auto &e : vs) {
@@ -705,7 +711,7 @@ public:
           std::format("squares {}", toString(squares, ',')),
           // std::format("map {}/{}", m_figureStatistics.size(), 5 + 2 +
           // MAP.size()),
-          fillString(f), possibleString(countPossible(field), 1),
+          fillString(f), possibleString(possible, 1),
           std::format("time {:%T}{}", sec, startFromEmptyField ? "" : "*")};
     s += join(vs);
 
@@ -1430,9 +1436,9 @@ int countPossible(const int field[N][N]) {
 }
 
 std::string possibleString(int i, const int o) {
-  if (i == -1) {
-    return "";
-  }
+  // if (i == -1) {
+  //   return "";
+  // }
   auto d = (1 - std::pow(1 - double(i) / ALL_COUNT, 3)) * 100;
   if (o == 0)
     return std::format(" {} {:.0f}%", i, d);
@@ -1466,25 +1472,16 @@ std::string join(const VString &vs) {
 }
 
 void newGame() {
-  for (auto &a : possibleStat) {
-    a = 0;
-  }
   gameBegin = std::chrono::steady_clock::now();
   best.setInvalid();
   fillStatistics.clear();
+  possibleStatistics.clear();
   pWindow->m_figureStatistics.clear();
 }
 
 std::string possibleStatString() {
-  int i = 0;
-  std::string s;
-  std::vector<std::pair<int, int>> v;
-  for (auto &a : possibleStat) {
-    if (a) {
-      v.push_back({i, a});
-    }
-    i++;
-  }
+  auto &v = possibleStatistics;
+  std::string s = "possible statistics\n";
   std::sort(v.begin(), v.end(), [](auto &a, auto &b) {
     return a.second > b.second || a.second == b.second && a.first < b.first;
   });
@@ -1496,21 +1493,20 @@ std::string possibleStatString() {
   for (auto &a : v) {
     s += std::format("{} {} {:.1f}%\n", a.first, a.second,
                      a.second * 100. / sum);
-    // s += std::format("{} - {} {:.1f}%\n", possibleString(a.first, 2), a.second,
-    //                  a.second * 100. / sum);
 
     auto d = std::pow(1 - double(a.first) / ALL_COUNT, 3);
     total += d * a.second / sum;
   }
-  s += std::format("total({}) {} bad {:.1f}%\n",v.size(), sum, total * 100);
+  s += std::format("total({}) {} bad {:.1f}%\n", v.size(), sum, total * 100);
   return s;
 }
 
 std::string fillStatString() {
-  auto&v=fillStatistics;
+  auto &v = fillStatistics;
   std::string s = "fill statistics\n";
-  std::sort(v.begin(), v.end(),
-            [](auto &a, auto &b) { return a.second > b.second || a.second == b.second && a.first > b.first; });
+  std::sort(v.begin(), v.end(), [](auto &a, auto &b) {
+    return a.second > b.second || a.second == b.second && a.first > b.first;
+  });
   int sum = std::accumulate(v.begin(), v.end(), 0,
                             [](int acc, auto &e) { return acc + e.second; });
 
@@ -1518,6 +1514,6 @@ std::string fillStatString() {
     s += std::format("{} {} {:.1f}%\n", a.first, a.second,
                      a.second * 100. / sum);
   }
-  s += std::format("total({}) {}\n",v.size(), sum);
+  s += std::format("total({}) {}\n", v.size(), sum);
   return s;
 }

@@ -233,9 +233,8 @@ std::string bestString() {
       }
 
       std::vector<std::string> vs = {
-          // std::format("estimate {}", toString(best.estimate, ' ', 2)),
           fillString(N * N - vi[1]),
-          possibleString(vi[2], 1),
+          possibleString(vi[2], 1)
       };
       s += join(vs);
     }
@@ -245,7 +244,7 @@ std::string bestString() {
     s += std::format("time {}ms\n", elapsed.count());
     s += std::format("size {} {}", set2.size(), skipc2);
 
-    prev.out[1] = s + "\n" + hs;
+    prev.out[1] = s;
     prev.best = best;
     return s;
   } else {

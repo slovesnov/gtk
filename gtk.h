@@ -822,7 +822,7 @@ int main(int argc, char *argv[]) {
   );
   app->signal_startup().connect([app, argv]() {
     app_dir = std::filesystem::absolute(argv[0]).parent_path();
-    std::string css_path = (app_dir / "style.css").string();
+    std::string css_path = (app_dir / "app.css").string();
     auto css_provider = Gtk::CssProvider::create();
     try {
       css_provider->load_from_path(css_path);

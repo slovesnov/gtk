@@ -15,3 +15,7 @@ icon path
 https://www.iconsdb.com/royal-blue-icons/dice-icon.html
 
 https://perchance.org/ai-icon-generator
+
+CONSOLE MODE
+clear && g++ -std=c++23 console.cpp -o console.exe && ./console.exe
+g++ console.cpp -o console.exe && ./console.exe

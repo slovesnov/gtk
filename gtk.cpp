@@ -17,8 +17,6 @@
 #include <gtkmm/window.h>
 #include <windows.h>
 
-using VPIntInt = std::vector<std::pair<int, int>>;
-
 int timer = 1;
 int saveText = 0;
 const bool LOG = 1;
@@ -58,8 +56,8 @@ VPIntInt fillStatistics, possibleStatistics;
 std::filesystem::path app_dir;
 
 std::string fillString(int possible);
-int countPossible(const int field[N][N]);
-std::string join(const VString &vs);
+//int countPossible(const int field[N][N]);
+//std::string join(const VString &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 std::string possibleStatString();
@@ -111,7 +109,6 @@ std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
                                 bool fromEstimate = false);
 std::string toABGR(uint32_t c, bool onlyRGB = true);
 std::string code(const Figure &a);
-std::string bestString();
 
 class Window : public Gtk::Window {
 public:

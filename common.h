@@ -16,12 +16,7 @@
 #include <unordered_map>
 #endif
 
-using VInt = std::vector<int>;
-using Figure = std::vector<VInt>;
-using VFigure = std::vector<Figure>;
-using VString = std::vector<std::string>;
-
-const int NF = -1;
+const int NF = 0;
 const bool DEBUG_MODE = NF != -1;
 
 // allow any number of moves 0-3
@@ -45,6 +40,12 @@ const std::string fixed_field[] = {
 54_1
     )"};
 static_assert(NF >= -1 && NF < int(std::size(fixed_field)));
+
+using VInt = std::vector<int>;
+using Figure = std::vector<VInt>;
+using VFigure = std::vector<Figure>;
+using VString = std::vector<std::string>;
+using VPIntInt = std::vector<std::pair<int, int>>;
 
 const int N = 8;
 const int NT = 3;
@@ -371,7 +372,12 @@ void from_string(const std::string &st, int field[N][N], Figure figures[3]) {
   std::smatch matches;
 
   if (!std::regex_search(data, matches, pattern)) {
-    pr("error {}", data);
+    if (DEBUG_MODE) {
+      pr("error {}", data);
+
+    } else {
+      pr1("error non debug mode");
+    }
     exit(1);
   }
 
@@ -706,6 +712,46 @@ std::string join(const VString &vs) {
           : (i >= ALL_COUNT ? std::to_string(i) : ALL_EXCEPT_DOT[i].string));
 }
  */
+
+void findBest() {
+  VFigure v;
+  std::string s, so;
+  int i, j;
+  auto start = std::chrono::steady_clock::now();
+  for (auto &a : figures) {
+    if (!a.empty()) {
+      v.push_back(a);
+    }
+  }
+
+  if (v.size() >= 1 && v.size() <= 3) {
+    s = to_string(field) + to_string(v);
+    auto &prev = previous[v.size()];
+    if (s == prev.code) {
+      best = prev.best;
+      return prev.out[1] + "\n" + gameTimeString();
+    }
+    prev.code = s;
+
+    figureIndex.clear();
+    set2.clear();
+    skipc2 = 0;
+    for (auto &a : figures) {
+      s = to_string(a);
+      auto it =
+          std::find_if(std::begin(ALL_EXCEPT_DOT), std::end(ALL_EXCEPT_DOT),
+                       [&s](auto &e) { return e.string == s; });
+
+      figureIndex.push_back(
+          it == std::end(ALL_EXCEPT_DOT)
+              ? ALL_COUNT - 1
+              : std::distance(std::begin(ALL_EXCEPT_DOT), it));
+    }
+
+    best = estimate(v, field, figureIndex, 0, 0);
+  }
+}
+
 std::string bestString() {
   VFigure v;
   std::string s, so;
@@ -875,7 +921,7 @@ void init() {
 
   InvalidInfo.setInvalid();
 
-  // for gtm newGame()
+  // for gtk newGame() do it
 #ifndef GTKMM_MAJOR_VERSION
   gameBegin = std::chrono::steady_clock::now();
   best.setInvalid();

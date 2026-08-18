@@ -1,7 +1,5 @@
-#include <algorithm>
-#include <chrono>
+#include "common.h"
 #include <filesystem>
-#include <format>
 #include <fstream>
 #include <gdkmm/general.h>
 #include <gdkmm/pixbuf.h>
@@ -17,15 +15,9 @@
 #include <gtkmm/styleprovider.h>
 #include <gtkmm/textview.h>
 #include <gtkmm/window.h>
-#include <iomanip>
-#include <iostream>
-#include <numeric>
-#include <set>
 #include <windows.h>
 
 using VString = std::vector<std::string>;
-using VInt = std::vector<int>;
-using Figure = std::vector<VInt>;
 using VFigure = std::vector<Figure>;
 using VPIntInt = std::vector<std::pair<int, int>>;
 
@@ -35,32 +27,9 @@ const bool LOG = 1;
 const int TIMER_MILLISECONDS = 500; // 800
 const int SAVE_TIMER_MILLISECONDS = 3000;
 const int NT = 3;
-const int N = 8;
 const std::string LOG_FILE = "log.txt";
 const std::string SCREEN_DIR = "png";
 
-const int NF = -1;
-const bool DEBUG_MODE = NF != -1;
-
-//allow any number of moves 0-3
-const std::string fixed_field[] = {
-    R"(11010111
-11111110
-01001110
-11101100
-11111110
-01110111
-00000010
-01111001
-1 1 1 1 1-01 01 11-111 101
-)",
-
-};
-
-static_assert(NF >= -1 && NF < int(std::size(fixed_field)));
-const std::unordered_map<std::string, std::string> MAP = {
-    {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
-    {"101 111", "π"},  {"01 11", "corner"}, {"001 001 111", "CORNER"}};
 const int DX = 763 - 852;
 const int DY = 347 - 202;
 const int DX1 = 743 - 763;
@@ -86,8 +55,7 @@ uint32_t figure_color[] = {0xff59ed9e, 0xffffb945, 0xff45dcf7};
 const int ADD_INDEX = 1;
 const std::string SAVE_PNG = "save png";
 const std::string SAVE_TEXT = "add text to log";
-int gtotalWidth, field[N][N];
-Figure figures[3];
+int gtotalWidth;
 VInt figureIndex;
 uint32_t *gp;
 std::vector<uint8_t> gbuffer;
@@ -108,8 +76,6 @@ std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 std::string possibleStatString();
 std::string fillStatString();
-void from_string(const std::string &s, int field[N][N], Figure figures[3]);
-void from_string(const std::string &s, Figure &f);
 std::string toString(int t, char separator = ' ', int digits = 3);
 std::string savePng();
 Figure rotate(const Figure &matrix);
@@ -263,7 +229,6 @@ std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
                                 bool fromEstimate = false);
 std::string toABGR(uint32_t c, bool onlyRGB = true);
 std::string code(const Figure &a);
-std::string to_string(const int field[N][N]);
 std::string to_string(const VFigure &vf);
 std::string to_string(const Figure &a, int o = 1);
 std::string bestString();
@@ -1187,20 +1152,6 @@ std::string toString(int t, char separator, int digits) {
   return s + e;
 }
 
-void from_string(const std::string &s, Figure &f) {
-  VInt v;
-  f.clear();
-  for (auto &a : s) {
-    if (strchr("01", a)) {
-      v.push_back(a - '0');
-    } else {
-      f.push_back(v);
-      v.clear();
-    }
-  }
-  f.push_back(v);
-}
-
 // returns false if move impossible
 bool make_move(int i, int j, const Figure &f, int field[N][N]) {
   int _x, _y, x, y, l;
@@ -1250,76 +1201,6 @@ bool make_move(int i, int j, const Figure &f, int field[N][N]) {
   return true;
 }
 
-void from_string(const std::string &s, int field[N][N], Figure figures[3]) {
-  int i = 0, j = -1;
-  for (auto &a : s) {
-    j++;
-    if (strchr("01", a)) {
-      field[i / N][i % N] = a - '0';
-      if (++i == N * N) {
-        break;
-      }
-    }
-  }
-
-  Glib::ustring data = s.substr(j + 1);
-  Glib::ustring s1 = R"(([^-\n]+))";
-  Glib::ustring s2 = "\\s*-\\s*";
-  Glib::ustring s3 = R"((?:\s+(\d{2})(?:\[\d+\])?_(\d))?)";
-  auto regex =
-      Glib::Regex::create(s1 + s2 + s1 + s2 + s1  + s3 + s3 + s3 );
-  Glib::MatchInfo match_info;
-
-  std::string g, g1;
-  if (!regex->match(data, match_info)) {
-    std::cout << "not match error line " << __LINE__;
-    return;
-  }
-  j = match_info.get_match_count();
-  for (i = 0; i < 3; i++) {
-    g = match_info.fetch(i + 1);
-    from_string(g, figures[i]);
-  }
-  const int moves = (j - 4) / 2;
-  std::cout << std::format("mc{} {} \n", j, moves);
-  for (i = 0; i < moves; i++) {
-    g = match_info.fetch(4 + 2 * i);  // index from 0 so -'0'
-    g1 = match_info.fetch(5 + 2 * i); // g1[0] - '1' because index starts from 1
-    make_move(g[0] - '0', g[1] - '0', figures[g1[0] - '1'], field);
-    // break;
-  }
-  // std::cout << std::format("{} \n", to_string(field));
-
-  if (moves) { // just view moves
-    for (i = 0; i < 3; i++) {
-      figures[i].clear();
-    }
-  }
-
-  // i = countPossible(field);
-  // std::cout << i << "#\n";
-  // exit(1);
-}
-
-#ifdef MASK
-bool subFigure(const Figure &inner, const Figure &outer) {
-  if (inner.size() > outer.size() || inner[0].size() > outer[0].size()) {
-    return false;
-  }
-
-  int x, y;
-  for (y = 0; y < inner.size(); y++) {
-    for (x = 0; x < inner[y].size(); x++) {
-      if (!outer[y][x] && inner[y][x]) {
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-#endif
-
 std::string code(const Figure &a) {
   int x, y, i;
   auto r = rotate(a);
@@ -1335,18 +1216,6 @@ std::string code(const Figure &a) {
     }
   }
   return min;
-}
-
-std::string to_string(const int field[N][N]) {
-  std::string s;
-  int i, j;
-  for (j = 0; j < N; j++) {
-    for (i = 0; i < N; i++) {
-      s += std::to_string(field[j][i]);
-    }
-    s += "\n";
-  }
-  return s;
 }
 
 bool hasPossibleMoves(const Figure &f, const int field[N][N]) {

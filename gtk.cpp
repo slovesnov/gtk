@@ -572,7 +572,7 @@ public:
     m_out[1] = bestString();
     m_out[2] = std::format(
         "{} now {}",
-        best.isInvalid() ? "" : possibleString(best.estimate / 10000, 2),
+        best.isInvalid() ? "" : possibleString(best.getPossibleAfter(), 2),
         possibleString(possible, 2));
 
     if (!DEBUG_MODE && LOG && log) {

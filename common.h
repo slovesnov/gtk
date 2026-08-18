@@ -9,8 +9,7 @@
 #include <source_location>
 #include <regex>
 
-#ifdef GTK_MAJOR_VERSION
-#else
+#ifndef GTK_MAJOR_VERSION
 #include <cmath>
 #include <cstring>
 #include <unordered_map>
@@ -21,16 +20,15 @@ const bool DEBUG_MODE = NF != -1;
 
 // allow any number of moves 0-3
 const std::string fixed_field[] = {
-    R"(
-11010111
-11111110
-01001110
-11101100
-11111110
-01110111
-00000010
-01111001
-1 1 1 1 1-01 01 11-111 101
+    R"(11101101
+00000110
+00000000
+00000110
+11111011
+10111110
+00000000
+10000011
+1 1 1-01 01 11-11111
 )",
     R"(00000000
     11101001 11100001 10000001 11010000 11100000 00110000 10100011 111 111 111 -
@@ -102,8 +100,8 @@ struct HFigure {
 } ALL_EXCEPT_DOT[ALL_COUNT - 1];
 
 struct Info {
-  int x, y, x1, y1, x2, y2, estimate, lines, end, possibleAfter, field[N][N],
-      fieldc, n[3], nlines[3], prize_x, prize_y;
+  int x, y, x1, y1, x2, y2, lines, end, field[N][N], n[3], nlines[3], prize_x,
+      prize_y, fullestimate;
   bool prize_add;
   // field,fieldc - field after move
   void operator=(const Info &e) {
@@ -113,18 +111,22 @@ struct Info {
     y1 = e.y1;
     x2 = e.x2;
     y2 = e.y2;
-    estimate = e.estimate;
     lines = e.lines;
     end = e.end;
-    possibleAfter = e.possibleAfter;
     copy(e.field, field);
-    fieldc = e.fieldc;
     std::copy(e.n, e.n + 3, n);
     std::copy(e.nlines, e.nlines + 3, nlines);
     prize_x = e.prize_x;
     prize_y = e.prize_y;
     prize_add = e.prize_add;
+    fullestimate = e.fullestimate;
   }
+
+  int getEstimate() { return fullestimate % 100; }
+
+  int getFieldc() { return N * N - (fullestimate / 100) % 100; }
+
+  int getPossibleAfter() { return fullestimate / 10000; }
 
   void setLines(int i) { nlines[i] = lines; }
 
@@ -152,27 +154,25 @@ struct Info {
        int _field[N][N]) {
     x = _x;
     y = _y;
-    estimate = _estimate;
     lines = _lines;
     end = _end;
-    possibleAfter = _possibleAfter;
     copy(_field, field);
-    fieldc = countFill(field);
     // endgame estimate
-    estimate = (possibleAfter * 100 + (64 - fieldc)) * 100 + estimate;
+    fullestimate =
+        (_possibleAfter * 100 + (64 - countFill(field))) * 100 + _estimate;
   }
 
   bool isInvalid() { return x == InvalidValue; }
   void setInvalid() { x = InvalidValue; }
 
   std::string to_string() {
+    int pa = getPossibleAfter();
     return std::format(
         "{}{}{}{}{}{}{}", x, y, lines ? '[' + std::to_string(lines) + ']' : "",
-        end ? "e" : "",
-        possibleAfter == InvalidValue ? "" : possibleString(possibleAfter, 0),
-        ARROW, estimate);
+        end ? "e" : "", pa == InvalidValue ? "" : possibleString(pa, 0), ARROW,
+        getEstimate());
   }
-  bool operator<(const Info &i) const { return estimate > i.estimate; }
+  bool operator<(const Info &i) const { return fullestimate > i.fullestimate; }
 
 } InvalidInfo, best;
 using VInfo = std::vector<Info>;
@@ -561,7 +561,7 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
   VFigure v2;
   int j, k;
   r.setInvalid();
-  r.estimate = 0;
+  r.fullestimate = 0;
   VInt vi = {0}, vfi, vc;
   if (vf.size() > 1) { // skip same figures
     if (figureIndex[1] != figureIndex[0])
@@ -577,13 +577,13 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
 
     if (vf.size() == 1) {
       if (v.empty()) {
-        return InvalidInfo;
+        // pri;
+         return InvalidInfo;
       }
-      auto it = std::max_element(v.begin(), v.end(), [](auto &a, auto &b) {
-        return a.estimate < b.estimate;
-      });
+      auto it = std::min_element(v.begin(), v.end());
       it->setLines(0);
-      return *it;
+    //   pr(it->allestimate);
+       return *it;
     }
 
     v2 = vf;
@@ -615,9 +615,9 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
       if (e.isInvalid())
         continue;
 
-      j = e.estimate + a.estimate % 100;
-      if (r.estimate < j) {
-        r.estimate = j;
+      j = e.fullestimate + a.fullestimate % 100;
+      if (r.fullestimate < j) {
+        r.fullestimate = j;
         if (vf.size() == 3) {
           a.setLines(0);
           r.eq(0, i, a);
@@ -758,7 +758,7 @@ std::string getPrizesString() {
   std::sort(v.begin(), v.end());
   for (auto &a : v) {
     s += std::format("{}{}{}{}{}\n", a.prize_add ? '+' : '-', a.prize_x,
-                     a.prize_y, ARROW, a.estimate);
+                     a.prize_y, ARROW, a.fullestimate);
   }
   if (!v.empty()) {
     best = v[0];
@@ -787,22 +787,6 @@ std::string bestString() {
     prev.code = s;
     s = "";
 
-    // figureIndex.clear();
-    // set2.clear();
-    // skipc2 = 0;
-    // for (auto &a : figures) {
-    //   s = to_string(a);
-    //   auto it =
-    //       std::find_if(std::begin(ALL_EXCEPT_DOT), std::end(ALL_EXCEPT_DOT),
-    //                    [&s](auto &e) { return e.string == s; });
-
-    //   figureIndex.push_back(
-    //       it == std::end(ALL_EXCEPT_DOT)
-    //           ? ALL_COUNT - 1
-    //           : std::distance(std::begin(ALL_EXCEPT_DOT), it));
-    // }
-
-    // best = estimate(v, field, figureIndex, 0, 0);
     findBest();
     if (best.isInvalid()) {
       s = getPrizesString(); // aslo set best
@@ -820,8 +804,9 @@ std::string bestString() {
         s += best.ss(i, v.size() == 1) + "\n";
       }
 
+      // todo
       VInt vi; // estimate (64 - fieldc)   possibleAfter
-      j = best.estimate;
+      j = best.fullestimate;
       for (i = 0; i < 3; i++, j /= 100) {
         vi.push_back(j % 100);
       }
@@ -835,7 +820,7 @@ std::string bestString() {
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     s += std::format("time {}ms", elapsed.count());
     prev.out[1] = s; // without game time
-    s += "\n"+gameTimeString();
+    s += "\n" + gameTimeString();
     // s += std::format("size {} {}", set2.size(), skipc2);
     prev.best = best;
     return s;

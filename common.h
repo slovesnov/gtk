@@ -63,7 +63,9 @@ VInt figureIndex;
 int field[N][N];
 Figure figures[3];
 std::set<uint32_t> set2;
+#ifdef USE_SKIPC
 int skipc2;
+#endif
 
 bool same(int f1[N][N], int f2[N][N]) {
   return std::equal(&f1[0][0], &f1[0][0] + N * N, &f2[0][0]);
@@ -130,6 +132,7 @@ struct Info {
     lines = _lines;
     end = _end;
     copy(_field, field);
+    setPrizeInvalid();
     fullestimate =
         (_possibleAfter * 100 + (64 - countFill(field))) * 100 + _estimate;
   }
@@ -154,16 +157,22 @@ struct Info {
     nlines[index] = e.nlines[index];
   }
 
-  std::string ss(int index, int o = 0) {
-    return std::format(
-        "{}{}{}{}", gx(index), gy(index),
-        nlines[index] == 0 ? "" : '[' + std::to_string(nlines[index]) + ']',
-        o ? "" : '_' + std::to_string(n[index] + ADD_INDEX));
+  std::string movesString(int size) {
+    std::string s;
+    int i;
+    for (i = 0; i < size; i++) {
+      s += std::format(
+          "{}{}{} {}\n",
+          size == 1 ? "" : std::to_string(n[i] + ADD_INDEX) + " ", gx(i), gy(i),
+          nlines[i] == 0 ? "" : '[' + std::to_string(nlines[i]) + ']');
+    }
+    return s;
   }
 
-  std::string getPrizeString() {
-        return std::format("{}{}{}{}{} {} {}", prize_add ? '+' : '-', prize_x,
-                     prize_y, ARROW, getPossibleAfter(),getFieldc(), getEstimate());
+  std::string prizeString() {
+    return std::format("{}{}{}{}{} {} {}", prize_add ? '+' : '-', prize_x,
+                       prize_y, ARROW, getPossibleAfter(), getFieldc(),
+                       getEstimate());
   }
 
   std::string to_string() {
@@ -177,9 +186,18 @@ struct Info {
   bool isInvalid() { return x == InvalidValue; }
   void setInvalid() { x = InvalidValue; }
 
+  bool isPrizeInvalid() { return prize_x == InvalidValue; }
+  void setPrizeInvalid() { prize_x = InvalidValue; }
+  void setPrize(int x, int y, int add) {
+    prize_x = x;
+    prize_y = y;
+    prize_add = add;
+  }
+
   bool operator<(const Info &i) const { return fullestimate > i.fullestimate; }
 
 } InvalidInfo, best;
+
 using VInfo = std::vector<Info>;
 
 struct Prev {
@@ -198,29 +216,23 @@ const std::unordered_map<std::string, std::string> MAP = {
                                        .file_name(),                           \
                            std::source_location::current().line());
 
-// Вспомогательная функция вывода через стабильный std::cout
 template <typename... Args>
 void print_line_helper(std::source_location loc, Args &&...args) {
   bool first = true;
 
-  // Лямбда-функция для вывода одного аргумента с пробелом
   auto print_with_space = [&](auto &&arg) {
     if (!first) {
-      std::cout
-          << " "; // Добавляем пробел перед каждым элементом, кроме первого
+      std::cout << " ";
     }
     first = false;
     std::cout << std::forward<decltype(arg)>(arg);
   };
 
-  // Раскрываем все переданные аргументы (Fold Expression)
   (print_with_space(std::forward<Args>(args)), ...);
 
-  // В самом конце выводим файл, строку и перенос строки
   std::cout << " " << loc.file_name() << ":" << loc.line() << "\n";
 }
 
-// Макрос скрывает вызов функции определения строки кода
 #define PRINT_LINE1(...)                                                       \
   print_line_helper(std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);
 
@@ -560,6 +572,7 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
   VFigure v2;
   int j, k;
   r.setInvalid();
+  r.setPrizeInvalid();
   r.fullestimate = 0;
   VInt vi = {0}, vfi, vc;
   if (vf.size() > 1) { // skip same figures
@@ -576,12 +589,10 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
 
     if (vf.size() == 1) {
       if (v.empty()) {
-        // pri;
         return InvalidInfo;
       }
       auto it = std::min_element(v.begin(), v.end());
       it->setLines(0);
-      //   pr(it->allestimate);
       return *it;
     }
 
@@ -593,7 +604,7 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
 
     for (auto &a : v) {
       j = (figureIndex[i] << 6) | (a.x << 3) | a.y; // 12bit
-      if (vf.size() == 2 /* && a.lines == 0 */ && lines == 0) {
+      if (vf.size() == 2 && lines == 0) {
         vc = {code, j};
         std::sort(vc.begin(), vc.end()); // asc
 
@@ -603,7 +614,9 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
         }
 
         if (set2.contains(j)) {
+#ifdef USE_SKIPC
           skipc2++;
+#endif
           continue;
         } else {
           set2.insert(j);
@@ -705,7 +718,9 @@ void findBest() {
 
   figureIndex.clear();
   set2.clear();
+#ifdef USE_SKIPC
   skipc2 = 0;
+#endif
   for (auto &a : figures) {
     s = to_string(a);
     auto it = std::find_if(std::begin(ALL_EXCEPT_DOT), std::end(ALL_EXCEPT_DOT),
@@ -735,9 +750,7 @@ VInfo getPrizesInfo() {
 
       findBest();
       if (!best.isInvalid()) {
-        best.prize_x = i;
-        best.prize_y = j;
-        best.prize_add = !b;
+        best.setPrize(i, j, !b);
         v.push_back(best);
       }
 
@@ -756,7 +769,7 @@ std::string getPrizesString() {
   auto v = getPrizesInfo();
   std::sort(v.begin(), v.end());
   for (auto &a : v) {
-    s += a.getPrizeString() + "\n";
+    s += a.prizeString() + "\n";
   }
   if (!v.empty()) {
     best = v[0];
@@ -787,7 +800,7 @@ std::string bestString() {
 
     findBest();
     if (best.isInvalid()) {
-      s = getPrizesString(); // aslo set best
+      s = getPrizesString(); // also set best
     }
     if (best.isInvalid()) {
       s = "always game over";
@@ -798,20 +811,9 @@ std::string bestString() {
         s += std::string(same(v, field) ? "any order" : "order important") +
              "\n";
       }
-      for (i = 0; i < v.size(); i++) {
-        s += best.ss(i, v.size() == 1) + "\n";
-      }
-
-      // todo
-      VInt vi; // estimate (64 - fieldc)   possibleAfter
-      j = best.fullestimate;
-      for (i = 0; i < 3; i++, j /= 100) {
-        vi.push_back(j % 100);
-      }
-
-      std::vector<std::string> vs = {fillString(N * N - vi[1]),
-                                     possibleString(vi[2], 1)};
-      s += join(vs);
+      //   s += best.movesString(v.size()) +
+      s += fillString(best.getFieldc()) + "\n" +
+           possibleString(best.getPossibleAfter(), 1) + "\n";
     }
     auto end = std::chrono::steady_clock::now();
     auto elapsed =
@@ -819,7 +821,9 @@ std::string bestString() {
     s += std::format("time {}ms", elapsed.count());
     prev.out[1] = s; // without game time
     s += "\n" + gameTimeString();
+#ifdef USE_SKIPC
     // s += std::format("size {} {}", set2.size(), skipc2);
+#endif
     prev.best = best;
     return s;
   } else {
@@ -828,14 +832,10 @@ std::string bestString() {
 }
 
 Figure reverseX(const Figure &matrix) {
-  return matrix |
-         std::views::transform([](auto &row) {
-           // Разворачиваем строку и сразу превращаем её в VInt
+  return matrix | std::views::transform([](auto &row) {
            return row | std::views::reverse | std::ranges::to<VInt>();
-         })
-         // Превращаем весь внешний результат в
-         // std::vector<VInt>
-         | std::ranges::to<std::vector>();
+         }) |
+         std::ranges::to<std::vector>();
 }
 
 Figure reverseY(Figure &a) {
@@ -857,12 +857,10 @@ Figure rotate(const Figure &matrix) {
   int rows = matrix.size();
   int cols = matrix[0].size();
 
-  // Создаем новую матрицу с перевернутыми размерами (cols x rows)
   Figure result(cols, VInt(rows));
 
   for (int i = 0; i < rows; ++i) {
     for (int j = 0; j < cols; ++j) {
-      // Формула для поворота по часовой стрелке
       result[j][rows - 1 - i] = matrix[i][j];
     }
   }

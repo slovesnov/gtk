@@ -90,7 +90,9 @@ struct FigureStatistics {
     }
     squares = std::count(mincode.begin(), mincode.end(), '1') * total;
   }
+
   bool operator<(const FigureStatistics &e) const { return total > e.total; }
+
   std::string to_string(int _total, int _max) const {
     std::string s;
     if (v.size() != 1) {
@@ -107,7 +109,8 @@ struct FigureStatistics {
 class Window : public Gtk::Window {
 public:
   Window()
-      : m_buttonSave(SAVE_PNG), m_buttonSaveText(SAVE_TEXT), m_buttonTimer() {
+      : m_buttonSave(SAVE_PNG), m_buttonSaveText(SAVE_TEXT),
+        m_buttonSearchPrize("search prize"), m_buttonTimer() {
     int i;
 
     set_resizable(false);
@@ -119,10 +122,8 @@ public:
     auto icon_theme = Gtk::IconTheme::get_for_display(display);
     icon_theme->add_search_path(app_dir.string());
 
-    // 4. Устанавливаем имя иконки (БЕЗ расширения файла)
-    // Если файл называется "app_icon.png", передаем просто "app_icon"
+    // set icon without file name. If file  "app.png", pass only "app"
     set_icon_name("app");
-    // set_icon_name("app-icon");
 
     for (i = 0; i < NT; i++) {
       if (i == 2) {
@@ -144,6 +145,7 @@ public:
     box->append(m_buttonSave);
     box->append(m_buttonSaveText);
     box->append(m_buttonTimer);
+    box->append(m_buttonSearchPrize);
     box->append(m_text_view[2]);
     box->append(m_drawing_area);
     box->append(m_scrolled_window[1]);
@@ -165,6 +167,16 @@ public:
     m_buttonSaveText.signal_clicked().connect([this]() {
       saveText = 1;
       m_buttonSaveText.set_label("waiting...");
+    });
+
+    m_buttonSearchPrize.signal_clicked().connect([this]() {
+      if (timer) {
+        timer = 0;
+        setButtonTimerText();
+      }
+      int i = 1;
+      m_out[i] = getPrizesString();
+      m_text_view[i].get_buffer()->set_text(m_out[i]);
     });
 
     m_buttonTimer.signal_clicked().connect([this]() {
@@ -196,6 +208,27 @@ public:
     double g = ((i >> 8) & 0xFF) / 255.0;
     double r = (i & 0xFF) / 255.0;
     cr->set_source_rgb(r, g, b);
+  }
+
+  void draw_hatched_square(const Cairo::RefPtr<Cairo::Context> &cr, int i,
+                           int j) {
+    const int Q = DRAW_AREA_SQUARE;
+    const int W = DRAW_AREA_SQUARE / 3;
+    auto pattern_surface =
+        Cairo::ImageSurface::create(Cairo::Surface::Format::ARGB32, W, W);
+    auto pattern_cr = Cairo::Context::create(pattern_surface);
+
+    pattern_cr->set_source_rgb(0, 0, 0);
+    pattern_cr->set_line_width(.5);
+    pattern_cr->move_to(0, W);
+    pattern_cr->line_to(W, 0);
+    pattern_cr->stroke();
+
+    auto pattern = Cairo::SurfacePattern::create(pattern_surface);
+    pattern->set_extend(Cairo::Pattern::Extend::REPEAT);
+    cr->set_source(pattern);
+    cr->rectangle(i * Q, j * Q, Q, Q);
+    cr->fill();
   }
 
   void on_draw(const Cairo::RefPtr<Cairo::Context> &cr, int width, int height) {
@@ -239,10 +272,6 @@ public:
         }
         cr->fill();
       }
-
-      const int BITS = 4;
-      const int MB = 1 << BITS;
-      const int MASK = MB - 1;
 
       for (n = 0; n < vf.size(); n++) {
         i = best.gx(n);
@@ -298,6 +327,10 @@ public:
             draw_text(cr, cx, cy, s);
           }
         }
+      }
+
+      if (!best.isPrizeInvalid()) {
+        draw_hatched_square(cr, best.prize_x, best.prize_y);
       }
     }
 
@@ -593,7 +626,8 @@ public:
   Gtk::ScrolledWindow m_scrolled_window[NT];
   Gtk::TextView m_text_view[NT];
   std::string m_out[NT];
-  Gtk::Button m_buttonSave, m_buttonSaveText, m_buttonTimer;
+  Gtk::Button m_buttonSave, m_buttonSaveText, m_buttonTimer,
+      m_buttonSearchPrize;
   Gtk::DrawingArea m_drawing_area;
   std::string m_prev, m_prevfields;
   std::vector<FigureStatistics> m_figureStatistics;
@@ -680,15 +714,8 @@ Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int o) {
   uint8_t *crop_start_ptr =
       reinterpret_cast<uint8_t *>(gp) + (crop_y * rowstride) + (crop_x * 4);
 
-  return Gdk::Pixbuf::create_from_data(
-      crop_start_ptr,       // Указатель на первый пиксель кропа
-      Gdk::Colorspace::RGB, // Цветовое пространство
-      true,                 // Наличие альфа-канала (has_alpha)
-      8,                    // Глубина цвета (bits_per_sample)
-      crop_w,               // Ширина кропа
-      crop_h,               // Высота кропа
-      rowstride             // Шаг строки исходного (!) буфера
-  );
+  return Gdk::Pixbuf::create_from_data(crop_start_ptr, Gdk::Colorspace::RGB,
+                                       true, 8, crop_w, crop_h, rowstride);
 }
 
 std::string savePng() {
@@ -697,10 +724,7 @@ std::string savePng() {
   if (pixbuf) {
     try {
       s = dateTimeString() + ".png";
-      pixbuf->save("./" + SCREEN_DIR + '/' + s, "png",
-                   {"compression"}, // Вектор имен опций
-                   {"9"} // Вектор значений опций (максимальное сжатие)
-      );
+      pixbuf->save("./" + SCREEN_DIR + '/' + s, "png", {"compression"}, {"9"});
 
     } catch (const Glib::Error &ex) {
       s = "error save PNG: " + std::string(ex.what());
@@ -714,28 +738,23 @@ std::string savePng() {
 }
 
 std::string get_screenshot_winapi() {
-  // 1. Получаем контекст устройства всего экрана
   HDC hScreenDC = GetDC(NULL);
   HDC hMemoryDC = CreateCompatibleDC(hScreenDC);
 
   int width = GetSystemMetrics(SM_CXSCREEN);
   int height = GetSystemMetrics(SM_CYSCREEN);
 
-  // 2. Создаем битмап в памяти Windows
   HBITMAP hBitmap = CreateCompatibleBitmap(hScreenDC, width, height);
   HBITMAP hOldBitmap = (HBITMAP)SelectObject(hMemoryDC, hBitmap);
 
-  // 3. Копируем экран в память
   BitBlt(hMemoryDC, 0, 0, width, height, hScreenDC, 0, 0, SRCCOPY);
 
-  // 4. Подготавливаем структуру для извлечения пикселей в формате RGBA/BGRA
   BITMAPINFOHEADER bi;
   bi.biSize = sizeof(BITMAPINFOHEADER);
   bi.biWidth = width;
-  bi.biHeight =
-      -height; // Отрицательное значение, чтобы картинка не была перевернута
+  bi.biHeight = -height;
   bi.biPlanes = 1;
-  bi.biBitCount = 32; // 4 байта на пиксель (BGRA)
+  bi.biBitCount = 32;
   bi.biCompression = BI_RGB;
   bi.biSizeImage = 0;
 
@@ -743,18 +762,16 @@ std::string get_screenshot_winapi() {
   GetDIBits(hMemoryDC, hBitmap, 0, height, gbuffer.data(), (BITMAPINFO *)&bi,
             DIB_RGB_COLORS);
 
-  // Освобождаем ресурсы WinAPI
   SelectObject(hMemoryDC, hOldBitmap);
   DeleteObject(hBitmap);
   DeleteDC(hMemoryDC);
   ReleaseDC(NULL, hScreenDC);
 
-  // 5. Конвертируем BGRA в RGBA (GTK ожидает RGBA канал)
   for (size_t i = 0; i < gbuffer.size(); i += 4) {
     uint8_t blue = gbuffer[i];
     gbuffer[i] = gbuffer[i + 2]; // Red
     gbuffer[i + 2] = blue;       // Blue
-                                 // gbuffer[i+3] остается Alpha
+                                 // gbuffer[i+3] Alpha
   }
 
   gp = reinterpret_cast<uint32_t *>(gbuffer.data());

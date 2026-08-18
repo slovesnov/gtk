@@ -16,7 +16,7 @@
 #include <unordered_map>
 #endif
 
-const int NF = 0;
+const int NF = -1;
 const bool DEBUG_MODE = NF != -1;
 
 // allow any number of moves 0-3
@@ -53,6 +53,11 @@ const int ADD_INDEX = 1;
 const int InvalidValue = -1;
 const int ALL_COUNT = 39;
 const Figure DOT = {{1}};
+#ifdef GTKMM_MAJOR_VERSION
+const std::string ARROW = "→";
+#else
+const std::string ARROW = "=";
+#endif
 
 std::chrono::steady_clock::time_point gameBegin;
 bool startFromEmptyField = 0;
@@ -153,47 +158,31 @@ struct Info {
     possibleAfter = _possibleAfter;
     copy(_field, field);
     fieldc = countFill(field);
+    // endgame estimate
+    estimate = (possibleAfter * 100 + (64 - fieldc)) * 100 + estimate;
   }
-  Info(int _x, int _y, int _estimate, int _lines, int _end) {
-    x = _x;
-    y = _y;
-    estimate = _estimate;
-    lines = _lines;
-    end = _end;
-  }
+  //   Info(int _x, int _y, int _estimate, int _lines, int _end) {
+  //     x = _x;
+  //     y = _y;
+  //     estimate = _estimate;
+  //     lines = _lines;
+  //     end = _end;
+  //   }
 
   bool isInvalid() { return x == InvalidValue; }
   void setInvalid() { x = InvalidValue; }
 
   std::string to_string() {
     return std::format(
-        "{}{}{}{}{}→{}", x, y, lines ? '[' + std::to_string(lines) + ']' : "",
+        "{}{}{}{}{}{}{}", x, y, lines ? '[' + std::to_string(lines) + ']' : "",
         end ? "e" : "",
         possibleAfter == InvalidValue ? "" : possibleString(possibleAfter, 0),
-        estimate);
+        ARROW, estimate);
   }
-  bool operator<(const Info &i) const {
-    if (end != i.end) {
-      return end < i.end;
-    }
-    if (possibleAfter != i.possibleAfter) {
-      return possibleAfter > i.possibleAfter;
-    }
+  bool operator<(const Info &i) const { return estimate > i.estimate; }
 
-    if (estimate != i.estimate) {
-      return estimate > i.estimate;
-    }
-
-    return lines > i.lines;
-  }
-
-  void countEstimate() {
-    // endgame estimate
-    estimate = (possibleAfter * 100 + (64 - fieldc)) * 100 + estimate;
-  }
 } InvalidInfo, best;
 using VInfo = std::vector<Info>;
-
 
 struct Prev {
   std::string code, out[NT];
@@ -497,7 +486,7 @@ int countPossible(const int field[N][N]) {
 }
 
 VInfo possibleMoves(const Figure &f, const VFigure &recent,
-                    const int field[N][N], bool fromEstimate) {
+                    const int field[N][N], bool fromEstimate = false) {
   int i, j, es, x, y, k, l, _x, _y, end, fi, possible;
   int fill[N][N], after[N][N];
   VInfo ea;
@@ -568,11 +557,7 @@ VInfo possibleMoves(const Figure &f, const VFigure &recent,
 }
 
 VInfo possibleMoves(const Figure &f, const int field[N][N]) {
-  auto v = possibleMoves(f, {}, field, true);
-  for (auto &a : v) {
-    a.countEstimate();
-  }
-  return v;
+  return possibleMoves(f, {}, field, true);
 }
 
 int index3(int i, int j) { return j + (i <= j); }
@@ -663,9 +648,7 @@ std::vector<VInt> permutations(int n) {
   std::vector<VInt> r;
   std::vector<int> arr(n);
   std::iota(arr.begin(), arr.end(), 0);
-  int count = 0;
   do {
-    count++;
     r.push_back(arr);
   } while (std::next_permutation(arr.begin(), arr.end()));
   return r;
@@ -743,6 +726,53 @@ void findBest() {
   best = estimate(v, field, figureIndex, 0, 0);
 }
 
+VInfo getPrizesInfo() {
+  VInfo v;
+  int i, j, original[N][N];
+  bool b;
+  copy(field, original);
+  for (i = 0; i < N; i++) {
+    for (j = 0; j < N; j++) {
+      b = field[j][i];
+      if (b) {
+        field[j][i] = 0;
+      } else {
+        copy(original, field);
+        make_move(i, j, DOT, field);
+      }
+
+      findBest();
+      if (!best.isInvalid()) {
+        best.prize_x = i;
+        best.prize_y = j;
+        best.prize_add = !b;
+        v.push_back(best);
+      }
+
+      if (b) {
+        field[j][i] = 1;
+      } else {
+        copy(original, field);
+      }
+    }
+  }
+  return v;
+}
+
+std::string getPrizesString() {
+  std::string s;
+  auto v = getPrizesInfo();
+  std::sort(v.begin(), v.end());
+  for (auto &a : v) {
+    s += std::format("{}{}{}{}{}\n", a.prize_add ? '+' : '-', a.prize_x,
+                     a.prize_y, ARROW, a.estimate);
+  }
+  if (!v.empty()) {
+    best = v[0];
+  }
+  return s;
+}
+
 std::string bestString() {
   VFigure v;
   std::string s, so;
@@ -762,6 +792,7 @@ std::string bestString() {
       return prev.out[1] + "\n" + gameTimeString();
     }
     prev.code = s;
+    s = "";
 
     // figureIndex.clear();
     // set2.clear();
@@ -781,16 +812,17 @@ std::string bestString() {
     // best = estimate(v, field, figureIndex, 0, 0);
     findBest();
     if (best.isInvalid()) {
-      s = "always game over\n";
+      s = getPrizesString(); // aslo set best
+    }
+    if (best.isInvalid()) {
+      s = "always game over";
     } else {
-
       if (v.size() == 1) {
         best.n[0] = 0;
       } else {
-        so = (same(v, field) ? "any order" : "order important") +
-             std::string("\n");
+        s += std::string(same(v, field) ? "any order" : "order important") +
+             "\n";
       }
-      s = so;
       for (i = 0; i < v.size(); i++) {
         s += best.ss(i, v.size() == 1) + "\n";
       }
@@ -810,7 +842,7 @@ std::string bestString() {
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     s += std::format("time {}ms", elapsed.count());
     prev.out[1] = s; // without game time
-    s += gameTimeString();
+    s += "\n"+gameTimeString();
     // s += std::format("size {} {}", set2.size(), skipc2);
     prev.best = best;
     return s;

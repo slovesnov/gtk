@@ -1,4 +1,3 @@
-#include "common.h"
 #include <filesystem>
 #include <fstream>
 #include <gdkmm/general.h>
@@ -16,6 +15,7 @@
 #include <gtkmm/textview.h>
 #include <gtkmm/window.h>
 #include <windows.h>
+#include "common.h"
 
 int timer = 1;
 int saveText = 0;
@@ -56,8 +56,8 @@ VPIntInt fillStatistics, possibleStatistics;
 std::filesystem::path app_dir;
 
 std::string fillString(int possible);
-//int countPossible(const int field[N][N]);
-//std::string join(const VString &vs);
+// int countPossible(const int field[N][N]);
+// std::string join(const VString &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 std::string possibleStatString();
@@ -206,7 +206,7 @@ public:
     const int Q = DRAW_AREA_SQUARE;
     const bool usePixbuf = 0;
 
-    if (best.isInvalid() ) {
+    if (best.isInvalid()) {
       auto style_context = get_style_context();
       Gdk::RGBA bg_color;
       style_context->lookup_color("theme_bg_color", bg_color);

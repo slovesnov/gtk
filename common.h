@@ -7,12 +7,12 @@
 #include <print>
 #include <set>
 #include <source_location>
+#include <regex>
 
 #ifdef GTK_MAJOR_VERSION
 #else
 #include <cmath>
 #include <cstring>
-#include <regex>
 #include <unordered_map>
 #endif
 
@@ -161,13 +161,6 @@ struct Info {
     // endgame estimate
     estimate = (possibleAfter * 100 + (64 - fieldc)) * 100 + estimate;
   }
-  //   Info(int _x, int _y, int _estimate, int _lines, int _end) {
-  //     x = _x;
-  //     y = _y;
-  //     estimate = _estimate;
-  //     lines = _lines;
-  //     end = _end;
-  //   }
 
   bool isInvalid() { return x == InvalidValue; }
   void setInvalid() { x = InvalidValue; }

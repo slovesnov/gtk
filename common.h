@@ -103,7 +103,7 @@ struct Info {
   int x, y, x1, y1, x2, y2, lines, end, field[N][N], n[3], nlines[3], prize_x,
       prize_y, fullestimate;
   bool prize_add;
-  // field,fieldc - field after move
+  // field - field after move
   void operator=(const Info &e) {
     x = e.x;
     y = e.y;
@@ -120,6 +120,18 @@ struct Info {
     prize_y = e.prize_y;
     prize_add = e.prize_add;
     fullestimate = e.fullestimate;
+  }
+
+  Info() {}
+  Info(int _x, int _y, int _estimate, int _lines, int _end, int _possibleAfter,
+       int _field[N][N]) {
+    x = _x;
+    y = _y;
+    lines = _lines;
+    end = _end;
+    copy(_field, field);
+    fullestimate =
+        (_possibleAfter * 100 + (64 - countFill(field))) * 100 + _estimate;
   }
 
   int getEstimate() { return fullestimate % 100; }
@@ -149,21 +161,10 @@ struct Info {
         o ? "" : '_' + std::to_string(n[index] + ADD_INDEX));
   }
 
-  Info() {}
-  Info(int _x, int _y, int _estimate, int _lines, int _end, int _possibleAfter,
-       int _field[N][N]) {
-    x = _x;
-    y = _y;
-    lines = _lines;
-    end = _end;
-    copy(_field, field);
-    // endgame estimate
-    fullestimate =
-        (_possibleAfter * 100 + (64 - countFill(field))) * 100 + _estimate;
+  std::string getPrizeString() {
+        return std::format("{}{}{}{}{} {} {}", prize_add ? '+' : '-', prize_x,
+                     prize_y, ARROW, getPossibleAfter(),getFieldc(), getEstimate());
   }
-
-  bool isInvalid() { return x == InvalidValue; }
-  void setInvalid() { x = InvalidValue; }
 
   std::string to_string() {
     int pa = getPossibleAfter();
@@ -172,6 +173,10 @@ struct Info {
         end ? "e" : "", pa == InvalidValue ? "" : possibleString(pa, 0), ARROW,
         getEstimate());
   }
+
+  bool isInvalid() { return x == InvalidValue; }
+  void setInvalid() { x = InvalidValue; }
+
   bool operator<(const Info &i) const { return fullestimate > i.fullestimate; }
 
 } InvalidInfo, best;
@@ -186,12 +191,6 @@ const std::unordered_map<std::string, std::string> MAP = {
     {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
     {"101 111", "π"},  {"01 11", "corner"}, {"001 001 111", "CORNER"}};
 
-/* #define PRINT(fmt, ...) \
-  std::cout << std::format(fmt " line{}\n" __VA_OPT__(, )                      \
-                               __VA_ARGS__ __VA_OPT__(, )                      \
-                                   std::source_location::current()             \
-                                       .line());
- */
 #define PRINT(fmt, ...)                                                        \
   std::cout << std::format(fmt " {}:{}\n" __VA_OPT__(, )                       \
                                __VA_ARGS__ __VA_OPT__(, )                      \
@@ -578,12 +577,12 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
     if (vf.size() == 1) {
       if (v.empty()) {
         // pri;
-         return InvalidInfo;
+        return InvalidInfo;
       }
       auto it = std::min_element(v.begin(), v.end());
       it->setLines(0);
-    //   pr(it->allestimate);
-       return *it;
+      //   pr(it->allestimate);
+      return *it;
     }
 
     v2 = vf;
@@ -757,8 +756,7 @@ std::string getPrizesString() {
   auto v = getPrizesInfo();
   std::sort(v.begin(), v.end());
   for (auto &a : v) {
-    s += std::format("{}{}{}{}{}\n", a.prize_add ? '+' : '-', a.prize_x,
-                     a.prize_y, ARROW, a.fullestimate);
+    s += a.getPrizeString() + "\n";
   }
   if (!v.empty()) {
     best = v[0];

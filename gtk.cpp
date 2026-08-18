@@ -56,8 +56,6 @@ VPIntInt fillStatistics, possibleStatistics;
 std::filesystem::path app_dir;
 
 std::string fillString(int possible);
-// int countPossible(const int field[N][N]);
-// std::string join(const VString &vs);
 std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 std::string possibleStatString();
@@ -65,6 +63,9 @@ std::string fillStatString();
 std::string toString(int t, char separator = ' ', int digits = 3);
 std::string savePng();
 Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int o);
+std::string get_screenshot_winapi();
+std::string toABGR(uint32_t c, bool onlyRGB = true);
+std::string code(const Figure &a);
 
 struct PointInfo {
   int x;
@@ -102,10 +103,6 @@ struct FigureStatistics {
                        total * 100. / _total, s);
   }
 };
-
-std::string get_screenshot_winapi();
-std::string toABGR(uint32_t c, bool onlyRGB = true);
-std::string code(const Figure &a);
 
 class Window : public Gtk::Window {
 public:

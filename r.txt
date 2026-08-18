@@ -2,6 +2,9 @@ cd e:/slovesno/gtk
 clear && g++ -std=c++23 gtk.cpp app.res `pkg-config gtkmm-4.0 --cflags --libs` -lgdi32 && ./a.exe
 ./a.exe
 
+//-lgdi32 not need
+g++ -std=c++23 gtk.cpp app.res -o gtk.exe `pkg-config gtkmm-4.0 --cflags --libs` -mwindows
+
 ctrl+u = clear command line input text
 ctrl+l = clear (cls)
 

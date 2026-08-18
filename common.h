@@ -779,8 +779,7 @@ std::string getPrizesString() {
 
 std::string bestString() {
   VFigure v;
-  std::string s, so;
-  int i, j;
+  std::string s;
   auto start = std::chrono::steady_clock::now();
   for (auto &a : figures) {
     if (!a.empty()) {
@@ -803,7 +802,7 @@ std::string bestString() {
       s = getPrizesString(); // also set best
     }
     if (best.isInvalid()) {
-      s = "always game over";
+      s = "always game over\n";//'\n' needs
     } else {
       if (v.size() == 1) {
         best.n[0] = 0;
@@ -812,8 +811,10 @@ std::string bestString() {
              "\n";
       }
       //   s += best.movesString(v.size()) +
-      s += fillString(best.getFieldc()) + "\n" +
-           possibleString(best.getPossibleAfter(), 1) + "\n";
+      s += "after " + fillString(best.getFieldc()) + "\n" + "after " +
+           possibleString(best.getPossibleAfter(), 1) + "\n" + "now " +
+           fillString(countFill(field)) + "\n" + "now " +
+           possibleString(countPossible(field), 1) + "\n";
     }
     auto end = std::chrono::steady_clock::now();
     auto elapsed =

@@ -587,11 +587,8 @@ public:
     vs = {
         std::format("figures {}", total),
         std::format("squares {}", toString(squares, ',')),
-        // std::format("map {}/{}", m_figureStatistics.size(), 5 + 2 +
-        // MAP.size()),
-        fillString(f),
-        possibleString(possible, 1),
-        // std::format("time {:%T}{}", sec, startFromEmptyField ? "" : "*")
+        // fillString(f),
+        // possibleString(possible, 1),
     };
     s += join(vs);
 

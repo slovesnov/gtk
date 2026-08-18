@@ -104,9 +104,6 @@ struct FigureStatistics {
 };
 
 std::string get_screenshot_winapi();
-std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
-                                const int field[N][N],
-                                bool fromEstimate = false);
 std::string toABGR(uint32_t c, bool onlyRGB = true);
 std::string code(const Figure &a);
 
@@ -245,7 +242,6 @@ public:
         }
         cr->fill();
       }
-    pr1(vf.size(),best.n[0],best.n[1],best.n[2]);
 
       const int BITS = 4;
       const int MB = 1 << BITS;

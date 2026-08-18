@@ -52,6 +52,7 @@ const int NT = 3;
 const int ADD_INDEX = 1;
 const int InvalidValue = -1;
 const int ALL_COUNT = 39;
+const Figure DOT = {{1}};
 
 std::chrono::steady_clock::time_point gameBegin;
 bool startFromEmptyField = 0;
@@ -97,7 +98,8 @@ struct HFigure {
 
 struct Info {
   int x, y, x1, y1, x2, y2, estimate, lines, end, possibleAfter, field[N][N],
-      fieldc, n[3], nlines[3];
+      fieldc, n[3], nlines[3], prize_x, prize_y;
+  bool prize_add;
   // field,fieldc - field after move
   void operator=(const Info &e) {
     x = e.x;
@@ -114,6 +116,9 @@ struct Info {
     fieldc = e.fieldc;
     std::copy(e.n, e.n + 3, n);
     std::copy(e.nlines, e.nlines + 3, nlines);
+    prize_x = e.prize_x;
+    prize_y = e.prize_y;
+    prize_add = e.prize_add;
   }
 
   void setLines(int i) { nlines[i] = lines; }
@@ -187,6 +192,8 @@ struct Info {
     estimate = (possibleAfter * 100 + (64 - fieldc)) * 100 + estimate;
   }
 } InvalidInfo, best;
+using VInfo = std::vector<Info>;
+
 
 struct Prev {
   std::string code, out[NT];
@@ -236,10 +243,10 @@ void print_line_helper(std::source_location loc, Args &&...args) {
 #define PRINT_LINE1(...)                                                       \
   print_line_helper(std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);
 
-// pr("error {} {}", v[i], v[i + 1]);
-#define pr PRINT
-// pr1("123");
-#define pr1 PRINT_LINE1
+// pr("123");
+#define pr PRINT_LINE1
+// pr1("error {} {}", v[i], v[i + 1]);
+#define pr1 PRINT
 #define pri PRINT_LINE1("")
 
 void from_string(const std::string &s, Figure &f) {
@@ -269,7 +276,6 @@ bool make_move(int i, int j, const Figure &f, int field[N][N]) {
         x = _x + i;
         y = _y + j;
         if (field[y][x]) {
-          pr("{} {}", y, x);
           return false;
         }
         xa.insert(x);
@@ -373,10 +379,10 @@ void from_string(const std::string &st, int field[N][N], Figure figures[3]) {
 
   if (!std::regex_search(data, matches, pattern)) {
     if (DEBUG_MODE) {
-      pr("error {}", data);
+      pr1("error {}", data);
 
     } else {
-      pr1("error non debug mode");
+      pr("error non debug mode");
     }
     exit(1);
   }
@@ -397,7 +403,7 @@ void from_string(const std::string &st, int field[N][N], Figure figures[3]) {
     b = make_move(v[i][0] - '0', v[i][1] - '0', figures[v[i + 1][0] - '1'],
                   field);
     if (!b) {
-      pr("error {} {}", v[i], v[i + 1]);
+      pr1("error {} {}", v[i], v[i + 1]);
       exit(1);
     }
   }
@@ -490,11 +496,11 @@ int countPossible(const int field[N][N]) {
   }
 }
 
-std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
-                                const int field[N][N], bool fromEstimate) {
+VInfo possibleMoves(const Figure &f, const VFigure &recent,
+                    const int field[N][N], bool fromEstimate) {
   int i, j, es, x, y, k, l, _x, _y, end, fi, possible;
   int fill[N][N], after[N][N];
-  std::vector<Info> ea;
+  VInfo ea;
   std::set<int> xa, ya;
   for (j = 0; j <= N - f.size(); j++) {
     for (i = 0; i <= N - f[0].size(); i++) {
@@ -561,7 +567,7 @@ std::vector<Info> possibleMoves(const Figure &f, const VFigure &recent,
   return ea;
 }
 
-std::vector<Info> possibleMoves(const Figure &f, const int field[N][N]) {
+VInfo possibleMoves(const Figure &f, const int field[N][N]) {
   auto v = possibleMoves(f, {}, field, true);
   for (auto &a : v) {
     a.countEstimate();
@@ -715,41 +721,26 @@ std::string join(const VString &vs) {
 
 void findBest() {
   VFigure v;
-  std::string s, so;
-  int i, j;
-  auto start = std::chrono::steady_clock::now();
+  std::string s;
   for (auto &a : figures) {
     if (!a.empty()) {
       v.push_back(a);
     }
   }
 
-  if (v.size() >= 1 && v.size() <= 3) {
-    s = to_string(field) + to_string(v);
-    auto &prev = previous[v.size()];
-    if (s == prev.code) {
-      best = prev.best;
-      return prev.out[1] + "\n" + gameTimeString();
-    }
-    prev.code = s;
+  figureIndex.clear();
+  set2.clear();
+  skipc2 = 0;
+  for (auto &a : figures) {
+    s = to_string(a);
+    auto it = std::find_if(std::begin(ALL_EXCEPT_DOT), std::end(ALL_EXCEPT_DOT),
+                           [&s](auto &e) { return e.string == s; });
 
-    figureIndex.clear();
-    set2.clear();
-    skipc2 = 0;
-    for (auto &a : figures) {
-      s = to_string(a);
-      auto it =
-          std::find_if(std::begin(ALL_EXCEPT_DOT), std::end(ALL_EXCEPT_DOT),
-                       [&s](auto &e) { return e.string == s; });
-
-      figureIndex.push_back(
-          it == std::end(ALL_EXCEPT_DOT)
-              ? ALL_COUNT - 1
-              : std::distance(std::begin(ALL_EXCEPT_DOT), it));
-    }
-
-    best = estimate(v, field, figureIndex, 0, 0);
+    figureIndex.push_back(it == std::end(ALL_EXCEPT_DOT)
+                              ? ALL_COUNT - 1
+                              : std::distance(std::begin(ALL_EXCEPT_DOT), it));
   }
+  best = estimate(v, field, figureIndex, 0, 0);
 }
 
 std::string bestString() {
@@ -772,22 +763,23 @@ std::string bestString() {
     }
     prev.code = s;
 
-    figureIndex.clear();
-    set2.clear();
-    skipc2 = 0;
-    for (auto &a : figures) {
-      s = to_string(a);
-      auto it =
-          std::find_if(std::begin(ALL_EXCEPT_DOT), std::end(ALL_EXCEPT_DOT),
-                       [&s](auto &e) { return e.string == s; });
+    // figureIndex.clear();
+    // set2.clear();
+    // skipc2 = 0;
+    // for (auto &a : figures) {
+    //   s = to_string(a);
+    //   auto it =
+    //       std::find_if(std::begin(ALL_EXCEPT_DOT), std::end(ALL_EXCEPT_DOT),
+    //                    [&s](auto &e) { return e.string == s; });
 
-      figureIndex.push_back(
-          it == std::end(ALL_EXCEPT_DOT)
-              ? ALL_COUNT - 1
-              : std::distance(std::begin(ALL_EXCEPT_DOT), it));
-    }
+    //   figureIndex.push_back(
+    //       it == std::end(ALL_EXCEPT_DOT)
+    //           ? ALL_COUNT - 1
+    //           : std::distance(std::begin(ALL_EXCEPT_DOT), it));
+    // }
 
-    best = estimate(v, field, figureIndex, 0, 0);
+    // best = estimate(v, field, figureIndex, 0, 0);
+    findBest();
     if (best.isInvalid()) {
       s = "always game over\n";
     } else {

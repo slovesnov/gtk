@@ -640,12 +640,7 @@ Info estimate(const VInt &vf, const int field[N][N], const VInt &figureIndex,
     auto v = possibleMoves(ALL_FIGURES[vf[i]], field);
 
     if (vf.size() == 1) {
-      if (v.empty()) {
-        return InvalidInfo;
-      }
-      auto it = std::min_element(v.begin(), v.end());
-      it->setLines(0);
-      return *it;
+      return v.empty() ? InvalidInfo : *std::min_element(v.begin(), v.end());
     }
 
     v2 = vf;
@@ -682,17 +677,15 @@ Info estimate(const VInt &vf, const int field[N][N], const VInt &figureIndex,
       j = e.fullestimate + a.getEstimate();
       if (r.fullestimate < j) {
         r.fullestimate = j;
+        a.setLines(0);
+        r.eq(0, i, a);
         if (vf.size() == 3) {
-          a.setLines(0);
-          r.eq(0, i, a);
           for (k = 2; k > 0; k--) { // order is important
             e.nlines[k] = e.nlines[k - 1];
             r.eq(k, index3(i, e.n[k - 1]), e, k == 2);
           }
         } else {
-          a.setLines(0);
           e.setLines(1);
-          r.eq(0, i, a);
           r.eq(1, 1 - i, e);
         }
       }

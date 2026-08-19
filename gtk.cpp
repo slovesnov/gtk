@@ -794,8 +794,7 @@ std::string get_screenshot_winapi() {
       uint32_t k = getPixelColor(x + i * STEP, y + j * STEP);
       field[j][i] = b = k != EMPTY[j];
       if (b) {
-        if (std::find(std::begin(POSSIBLE_COLOR), std::end(POSSIBLE_COLOR),
-                      k) == std::end(POSSIBLE_COLOR)) {
+        if (!std::ranges::contains(POSSIBLE_COLOR, k)) {
           l++;
         }
       }

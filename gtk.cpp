@@ -241,39 +241,39 @@ public:
     int i, j, n, x, y, cx, cy;
     const int Q = DRAW_AREA_SQUARE;
     const bool usePixbuf = 0;
+    VInt nf[N][N];
 
-    if (best.isInvalid()) {
-      auto style_context = get_style_context();
-      Gdk::RGBA bg_color;
-      style_context->lookup_color("theme_bg_color", bg_color);
-      Gdk::Cairo::set_source_rgba(cr, bg_color);
-      cr->rectangle(0, 0, width, height);
-      cr->fill();
+    // if (best.isInvalid()) {
+    //   auto style_context = get_style_context();
+    //   Gdk::RGBA bg_color;
+    //   style_context->lookup_color("theme_bg_color", bg_color);
+    //   Gdk::Cairo::set_source_rgba(cr, bg_color);
+    //   cr->rectangle(0, 0, width, height);
+    //   cr->fill();
+    // }
+
+    if (usePixbuf) {
+      auto pixbuf = createPixbuf(1);
+      int dest_width = Q * N;
+      int dest_height = Q * N;
+      Glib::RefPtr<Gdk::Pixbuf> resized_pixbuf =
+          pixbuf->scale_simple(Q * N, Q * N, Gdk::InterpType::BILINEAR);
+
+      Gdk::Cairo::set_source_pixbuf(cr, resized_pixbuf, 0, 0);
+      cr->paint();
     } else {
-      VInt vi = getNonEmptyIndex();
-
-      VInt nf[N][N];
-
-      if (usePixbuf) {
-        auto pixbuf = createPixbuf(1);
-        int dest_width = Q * N;
-        int dest_height = Q * N;
-        Glib::RefPtr<Gdk::Pixbuf> resized_pixbuf =
-            pixbuf->scale_simple(Q * N, Q * N, Gdk::InterpType::BILINEAR);
-
-        Gdk::Cairo::set_source_pixbuf(cr, resized_pixbuf, 0, 0);
-        cr->paint();
-      } else {
-        setColor(cr, BG_COLOR);
-        for (y = 0; y < N; y++) {
-          for (x = 0; x < N; x++) {
-            if (field[y][x])
-              cr->rectangle(x * Q, y * Q, Q, Q);
-          }
+      setColor(cr, BG_COLOR);
+      for (y = 0; y < N; y++) {
+        for (x = 0; x < N; x++) {
+          if (field[y][x])
+            cr->rectangle(x * Q, y * Q, Q, Q);
         }
-        cr->fill();
       }
+      cr->fill();
+    }
 
+    if (!best.isInvalid()) {
+      VInt vi = getNonEmptyIndex();
       for (n = 0; n < vi.size(); n++) {
         i = best.gx(n);
         j = best.gy(n);
@@ -406,12 +406,8 @@ public:
   bool tick() {
     int i;
     if (timer) {
-      if (DEBUG_MODE) {
-        from_string(fixed_field[NF], field);
-        m_out[1] = bestString();
-        m_drawing_area.queue_draw();
-      } else {
-        gets();
+      gets();
+      if (!DEBUG_MODE) {
         if (saveText) {
           addLog();
           saveText = 0;
@@ -438,30 +434,35 @@ public:
   void gets() {
     int i, j, f = 0;
     bool log = 0;
-    std::string s1, fields, name, cd, mincode;
+    std::string s1, fields, name, cd, mincode, s, se;
     for (auto &a : m_out) {
       a = "";
     }
-    auto s = get_screenshot_winapi();
-    if (!s.empty()) {
-      best.setInvalid();
-      m_out[0] = s;
-      return;
+    if (DEBUG_MODE) {
+      parseInitialString();
+    } else {
+      s = get_screenshot_winapi();
+      if (!s.empty()) {
+        best.setInvalid();
+        m_out[0] = s;
+        return;
+      }
     }
     m_drawing_area.queue_draw();
 
-    i = 0;
+    // i = 0;
     for (auto &f : gfigureIndex) {
       if (f != ALL_COUNT) {
         auto &a = ALL_FIGURES[f];
 
         VFigure recent;
         for (auto &n : gfigureIndex) {
-          if (n != ALL_COUNT && n != i) {
+          if (n != ALL_COUNT && n != f) {
             recent.push_back(ALL_FIGURES[n]);
           }
         }
 
+        pr(recent.size())
         auto v = possibleMoves(a, recent, field);
         std::sort(v.begin(), v.end());
         s += a.name + "\n";
@@ -469,7 +470,7 @@ public:
           s += e.to_string() + "\n";
         }
       }
-      i++;
+      // i++;
     }
     f = countFill(field);
     fields = to_string(field);
@@ -524,7 +525,7 @@ public:
       }
     }
 
-    auto se = s;
+    se = s;
     s = "";
 
     std::sort(m_figureStatistics.begin(), m_figureStatistics.end());

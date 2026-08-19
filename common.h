@@ -20,7 +20,7 @@ const bool DEBUG_MODE = NF != -1;
 
 // allow any number of moves 0-3
 const std::string fixed_field[] = {
-  R"(00000011
+    R"(00000011
 11111010
 11101001
 11111010
@@ -456,12 +456,7 @@ void from_string(const std::string &st, int field[N][N]) {
   std::smatch matches;
 
   if (!std::regex_search(data, matches, pattern)) {
-    if (DEBUG_MODE) {
-      pr1("error {}", data);
-
-    } else {
-      pr("error non debug mode");
-    }
+    pr1("error {}", data);
     exit(1);
   }
 
@@ -472,7 +467,6 @@ void from_string(const std::string &st, int field[N][N]) {
     }
     v.push_back(s);
   }
-  pr(v.size());
 
   for (i = 0; i < 3; i++) {
     gfigureIndex[i] = findFigureIndex(v[i]);
@@ -488,6 +482,14 @@ void from_string(const std::string &st, int field[N][N]) {
   }
 }
 
+void parseInitialString() {
+  if (DEBUG_MODE) {
+    from_string(fixed_field[NF], field);
+  } else {
+    pr("error non debug mode");
+  }
+}
+
 std::string gameTimeString() {
   auto elapsed1 = std::chrono::steady_clock::now() - gameBegin;
   auto duration_sec =
@@ -497,11 +499,11 @@ std::string gameTimeString() {
 }
 
 bool hasPossibleMoves(const Figure &f, const int field[N][N]) {
-  int i, j;
-  for (j = 0; j <= N - f.width; j++) {
-    for (i = 0; i <= N - f.height; i++) {
+  int x, y;
+  for (x = 0; x <= N - f.width; x++) {
+    for (y = 0; y <= N - f.height; y++) {
       for (auto &xy : f.xy) {
-        if (field[xy[1] + j][xy[0] + i]) {
+        if (field[xy[1] + y][xy[0] + x]) {
           goto l99;
         }
       }
@@ -571,6 +573,7 @@ VInfo possibleMoves(const Figure &f, const VFigure &recent,
   int i, j, es, x, y, k, l, _x, _y, end, fi, possible;
   int fill[N][N], after[N][N];
   VInfo ea;
+  bool bb;
   for (j = 0; j <= N - f.height; j++) {
     for (i = 0; i <= N - f.width; i++) {
       es = 0;
@@ -591,11 +594,21 @@ VInfo possibleMoves(const Figure &f, const VFigure &recent,
       l = resetAndGetLines(i, j, f, fill, after);
       fi = 0;
       end = recent.empty() ? 0 : 1;
+      bb = i == 2 && j == 4 && recent.size() == 2;
+      if (bb) {
+        for (auto &q : recent) {
+          pr(q.code)
+        }
+        pr(end, recent.size(), "\n", to_string(after))
+      }
       for (auto &e : recent) {
         fi++;
         if (end && hasPossibleMoves(e, after)) {
           end = 0;
         }
+      }
+      if (bb) {
+        pr(end)
       }
       possible = !fromEstimate || fi == 0 ? countPossible(after) : InvalidValue;
       ea.push_back(Info(i, j, es, l, end, possible, after));
@@ -839,9 +852,10 @@ std::string bestString() {
   auto end = std::chrono::steady_clock::now();
   auto elapsed =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-  s += std::format("time {}ms", elapsed.count())+ (hs.empty()?"": '\n' + hs);
+  s +=
+      std::format("time {}ms", elapsed.count()) + (hs.empty() ? "" : '\n' + hs);
   prev.out[1] = s; // without game time
-  s += '\n' + gameTimeString() ;
+  s += '\n' + gameTimeString();
 
 #ifdef USE_SKIPC
   // s += std::format("size {} {}", set2.size(), skipc2);

@@ -13,7 +13,7 @@ int main() {
   //   pr(a.to_string());
   // }
 
-  from_string(fixed_field[NF], field);
+  parseInitialString();
   for (auto a : gfigureIndex) {
     pr(ALL_FIGURES[a].name)
   }

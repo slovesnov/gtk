@@ -579,10 +579,14 @@ VInfo possibleMoves(const Figure &f, const VInt &recent,
         if (field[y][x]) {
           goto l183;
         }
-        e += (x == 0 ? 1 : field[y][x - 1]) +
-             (x == N - 1 ? 1 : field[y][x + 1]) +
-             (y == 0 ? 1 : field[y - 1][x]) +
-             (y == N - 1 ? 1 : field[y + 1][x]);
+        e += (x == 0 ? 1 : 2*field[y][x - 1]) +
+             (x == N - 1 ? 1 : 2*field[y][x + 1]) +
+             (y == 0 ? 1 : 2*field[y - 1][x]) +
+             (y == N - 1 ? 1 : 2*field[y + 1][x]);
+        // e += (x == 0 ? 1 : field[y][x - 1]) +
+        //      (x == N - 1 ? 1 : field[y][x + 1]) +
+        //      (y == 0 ? 1 : field[y - 1][x]) +
+        //      (y == N - 1 ? 1 : field[y + 1][x]);
         fill[y][x] = 1;
       }
 

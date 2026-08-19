@@ -20,8 +20,9 @@
 int timer = 1;
 int saveText = 0;
 const bool LOG = 1;
-const int TIMER_MILLISECONDS = 500; // 800
+const int TIMER_MILLISECONDS = 500;
 const int SAVE_TIMER_MILLISECONDS = 3000;
+const double HIGHLIGHT_SUCCESS = .75;
 const std::string LOG_FILE = "log.txt";
 const std::string SCREEN_DIR = "png";
 
@@ -72,6 +73,7 @@ Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int o);
 std::string get_screenshot_winapi();
 std::string toABGR(uint32_t c, bool onlyRGB = true);
 std::string code(const Figure &a);
+std::string fullPath(std::string name) { return (app_dir / name).string(); }
 
 struct PointInfo {
   int x;
@@ -116,7 +118,8 @@ class Window : public Gtk::Window {
 public:
   Window()
       : m_buttonSave(SAVE_PNG), m_buttonSaveText(SAVE_TEXT),
-        m_buttonSearchPrize("search prize"), m_buttonTimer() {
+        m_buttonSearchPrize("search prize"), m_buttonTimer(),
+        m_buttonClearLog("clear log") {
     int i;
 
     set_resizable(false);
@@ -149,6 +152,7 @@ public:
 
     auto box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
     box->append(m_buttonSave);
+    box->append(m_buttonClearLog);
     box->append(m_buttonSaveText);
     box->append(m_buttonTimer);
     box->append(m_buttonSearchPrize);
@@ -190,15 +194,35 @@ public:
       setButtonTimerText();
     });
 
+    m_buttonClearLog.signal_clicked().connect([this]() { removeLog(); });
+
     setButtonTimerText();
 
     init();
+    newGame();
+
+    auto buffer = m_text_view[2].get_buffer();
+    m_highlight_tag = buffer->create_tag("my_yellow_highlight");
+    m_highlight_tag->property_background() = "yellow";
+    m_highlight_tag->property_foreground() = "black";
+
     if (LOG)
       std::filesystem::create_directories("./" + SCREEN_DIR);
-    newGame();
 
     Glib::signal_timeout().connect(sigc::mem_fun(*this, &Window::tick),
                                    TIMER_MILLISECONDS);
+  }
+
+  void highlightText(bool highlight) {
+    auto buffer = m_text_view[2].get_buffer();
+    Gtk::TextBuffer::iterator start = buffer->begin();
+    Gtk::TextBuffer::iterator end = buffer->end();
+
+    if (highlight) {
+      buffer->apply_tag(m_highlight_tag, start, end);
+    } else {
+      buffer->remove_all_tags(start, end);
+    }
   }
 
   void newGame() {
@@ -390,8 +414,7 @@ public:
   }
 
   void addLog() {
-    //  std::ofstream file(LOG_FILE, std::ios::out | std::ios::trunc); //w+
-    std::ofstream file(LOG_FILE, std::ios::app);
+    std::ofstream file(fullPath(LOG_FILE), std::ios::app);
     std::string m(5, '-');
     file << "\n"
          << m << " " << dateTimeString() << " " << m << "\n"
@@ -403,8 +426,11 @@ public:
     file.close();
   }
 
+  void removeLog() { std::filesystem::remove(fullPath(LOG_FILE)); }
+
   bool tick() {
     int i;
+    bool b;
     if (timer) {
       gets();
       if (!DEBUG_MODE) {
@@ -417,6 +443,8 @@ public:
       for (i = 0; i < NT; i++) {
         m_text_view[i].get_buffer()->set_text(m_out[i]);
       }
+      highlightText(successProbability(best.getPossibleAfter()) <
+                    HIGHLIGHT_SUCCESS);
     }
     return !DEBUG_MODE;
   }
@@ -570,12 +598,14 @@ public:
   Gtk::TextView m_text_view[NT];
   std::string m_out[NT];
   Gtk::Button m_buttonSave, m_buttonSaveText, m_buttonTimer,
-      m_buttonSearchPrize;
+      m_buttonSearchPrize, m_buttonClearLog;
   Gtk::DrawingArea m_drawing_area;
   std::string m_prev, m_prevfields;
   std::vector<FigureStatistics> m_figureStatistics;
   std::string m_title;
+  Glib::RefPtr<Gtk::TextTag> m_highlight_tag;
 };
+
 
 int main(int argc, char *argv[]) {
   auto app = Gtk::Application::create("com.example.myapp"
@@ -583,7 +613,7 @@ int main(int argc, char *argv[]) {
   );
   app->signal_startup().connect([app, argv]() {
     app_dir = std::filesystem::absolute(argv[0]).parent_path();
-    std::string css_path = (app_dir / "app.css").string();
+    std::string css_path = fullPath("app.css");
     auto css_provider = Gtk::CssProvider::create();
     try {
       css_provider->load_from_path(css_path);

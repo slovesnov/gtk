@@ -107,8 +107,12 @@ int countFill(const int field[N][N]) {
   return c;
 }
 
+double successProbability(int i) {
+  return (1 - std::pow(1 - double(i) / ALL_COUNT, 3));
+}
+
 std::string possibleString(int i, const int o) {
-  auto d = (1 - std::pow(1 - double(i) / ALL_COUNT, 3)) * 100;
+  auto d = successProbability(i) * 100;
   if (o == 0)
     return std::format(" {} {:.0f}%", i, d);
   else if (o == 1)
@@ -203,9 +207,9 @@ int findFigureIndex(std::string code) {
 }
 
 struct Info {
-  int x, y, x1, y1, x2, y2, lines, end, field[N][N], n[3], nlines[3], prize_x,
+  int x, y, x1, y1, x2, y2, lines, field[N][N], n[3], nlines[3], prize_x,
       prize_y, fullestimate;
-  bool prize_add;
+  bool end, prize_add;
   // field - field after move
   void operator=(const Info &e) {
     x = e.x;
@@ -226,7 +230,7 @@ struct Info {
   }
 
   Info() {}
-  Info(int _x, int _y, int _estimate, int _lines, int _end, int _possibleAfter,
+  Info(int _x, int _y, int _estimate, int _lines, bool _end, int _possibleAfter,
        int _field[N][N]) {
     x = _x;
     y = _y;
@@ -570,8 +574,8 @@ int countPossible(const int field[N][N]) {
 
 VInfo possibleMoves(const Figure &f, const VFigure &recent,
                     const int field[N][N], bool fromEstimate = false) {
-  int i, j, e, x, y, l, end, possible;
-  int fill[N][N], after[N][N];
+  int i, j, e, x, y, l, possible, fill[N][N], after[N][N];
+  bool end;
   VInfo vi;
   for (j = 0; j <= N - f.height; j++) {
     for (i = 0; i <= N - f.width; i++) {
@@ -584,19 +588,19 @@ VInfo possibleMoves(const Figure &f, const VFigure &recent,
           goto l183;
         }
         e += (x == 0 ? 1 : field[y][x - 1]) +
-              (x == N - 1 ? 1 : field[y][x + 1]) +
-              (y == 0 ? 1 : field[y - 1][x]) +
-              (y == N - 1 ? 1 : field[y + 1][x]);
+             (x == N - 1 ? 1 : field[y][x + 1]) +
+             (y == 0 ? 1 : field[y - 1][x]) +
+             (y == N - 1 ? 1 : field[y + 1][x]);
         fill[y][x] = 1;
       }
 
       l = resetAndGetLines(i, j, f, fill, after);
       if (!fromEstimate) {
-        if (recent.empty()) {
-          pri;
-        }
-        end = !std::any_of(recent.begin(), recent.end(),
-                           [&after](auto &e) { return hasPossibleMoves(e, after); });
+        end = recent.empty() ? false
+                             : !std::any_of(recent.begin(), recent.end(),
+                                            [&after](auto &e) {
+                                              return hasPossibleMoves(e, after);
+                                            });
       }
       possible =
           !fromEstimate || recent.empty() ? countPossible(after) : InvalidValue;
@@ -841,9 +845,9 @@ std::string bestString() {
   auto end = std::chrono::steady_clock::now();
   auto elapsed =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-  s +=
-      std::format("time {}ms", elapsed.count()) + (hs.empty() ? "" : '\n' + hs);
-  prev.out[1] = s; // without game time
+  s += std::format("time {}ms",
+                   elapsed.count()); //+ (hs.empty() ? "" : '\n' + hs);
+  prev.out[1] = s;                   // without game time
   s += '\n' + gameTimeString();
 
 #ifdef USE_SKIPC

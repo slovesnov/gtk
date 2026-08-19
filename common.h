@@ -108,7 +108,7 @@ int countFill(const int field[N][N]) {
 }
 
 double successProbability(int i) {
-  return (1 - std::pow(1 - double(i) / ALL_COUNT, 3));
+  return 1 - std::pow(1 - double(i) / ALL_COUNT, 3);
 }
 
 std::string possibleString(int i, const int o) {
@@ -194,7 +194,7 @@ struct Figure {
 
 int findFigureIndex(std::string code) {
   auto it = std::find_if(std::begin(ALL_FIGURES), std::end(ALL_FIGURES),
-                      [&code](auto &e) { return e.code == code; });
+                         [&code](auto &e) { return e.code == code; });
   return std::distance(std::begin(ALL_FIGURES), it);
 }
 
@@ -564,8 +564,8 @@ int countPossible(const int field[N][N]) {
   }
 }
 
-VInfo possibleMoves(const Figure &f, const VInt &recent,
-                    const int field[N][N], bool fromEstimate = false) {
+VInfo possibleMoves(const Figure &f, const VInt &recent, const int field[N][N],
+                    bool fromEstimate = false) {
   int i, j, e, x, y, l, possible, fill[N][N], after[N][N];
   bool end;
   VInfo vi;
@@ -579,24 +579,29 @@ VInfo possibleMoves(const Figure &f, const VInt &recent,
         if (field[y][x]) {
           goto l183;
         }
-        e += (x == 0 ? 1 : 2*field[y][x - 1]) +
-             (x == N - 1 ? 1 : 2*field[y][x + 1]) +
-             (y == 0 ? 1 : 2*field[y - 1][x]) +
-             (y == N - 1 ? 1 : 2*field[y + 1][x]);
-        // e += (x == 0 ? 1 : field[y][x - 1]) +
-        //      (x == N - 1 ? 1 : field[y][x + 1]) +
-        //      (y == 0 ? 1 : field[y - 1][x]) +
-        //      (y == N - 1 ? 1 : field[y + 1][x]);
+        // e += (x == 0 ? 0 : field[y][x - 1]) +
+        //      (x == N - 1 ? 0 : field[y][x + 1]) +
+        //      (y == 0 ? 0 : field[y - 1][x]) +
+        //      (y == N - 1 ? 0 : field[y + 1][x]);
+        // e += (x == 0 ? 1 : 2*field[y][x - 1]) +
+        //      (x == N - 1 ? 1 : 2*field[y][x + 1]) +
+        //      (y == 0 ? 1 : 2*field[y - 1][x]) +
+        //      (y == N - 1 ? 1 : 2*field[y + 1][x]);
+        e += (x == 0 ? 1 : field[y][x - 1]) +
+             (x == N - 1 ? 1 : field[y][x + 1]) +
+             (y == 0 ? 1 : field[y - 1][x]) +
+             (y == N - 1 ? 1 : field[y + 1][x]);
         fill[y][x] = 1;
       }
 
       l = resetAndGetLines(i, j, f, fill, after);
       if (!fromEstimate) {
-        end = recent.empty() ? false
-                             : !std::any_of(recent.begin(), recent.end(),
-                                            [&after](auto &e) {
-                                              return hasPossibleMoves(ALL_FIGURES[e], after);
-                                            });
+        end =
+            recent.empty()
+                ? false
+                : !std::any_of(recent.begin(), recent.end(), [&after](auto &e) {
+                    return hasPossibleMoves(ALL_FIGURES[e], after);
+                  });
       }
       possible =
           !fromEstimate || recent.empty() ? countPossible(after) : InvalidValue;
@@ -674,13 +679,13 @@ Info estimate(const VInt &vf, const int field[N][N], const VInt &figureIndex,
       if (e.isInvalid())
         continue;
 
-      j = e.fullestimate + a.fullestimate % 100;
+      j = e.fullestimate + a.getEstimate();
       if (r.fullestimate < j) {
         r.fullestimate = j;
         if (vf.size() == 3) {
           a.setLines(0);
           r.eq(0, i, a);
-          for (int k = 2; k > 0; k--) { // order is important
+          for (k = 2; k > 0; k--) { // order is important
             e.nlines[k] = e.nlines[k - 1];
             r.eq(k, index3(i, e.n[k - 1]), e, k == 2);
           }

@@ -22,10 +22,50 @@ int saveText = 0;
 const bool LOG = 1;
 const int TIMER_MILLISECONDS = 500;
 const int SAVE_TIMER_MILLISECONDS = 3000;
-const double HIGHLIGHT_SUCCESS = .75;
 const std::string LOG_FILE = "log.txt";
 const std::string SCREEN_DIR = "png";
-
+const double HIGHLIGHT_SUCCESS = .995;
+/*
+39 100.000%
+38 99.998%
+37 99.987%
+36 99.954%
+35 99.892%
+34 99.789%
+33 99.636%
+32 99.422%
+31 99.137%
+30 98.771%
+29 98.314%
+28 97.756%
+27 97.087%
+26 96.296%
+25 95.374%
+24 94.310%
+23 93.095%
+22 91.718%
+21 90.168%
+20 88.437%
+19 86.514%
+18 84.388%
+17 82.050%
+16 79.489%
+15 76.695%
+14 73.659%
+13 70.370%
+12 66.818%
+11 62.993%
+10 58.885%
+9 54.483%
+8 49.778%
+7 44.760%
+6 39.417%
+5 33.741%
+4 27.721%
+3 21.347%
+2 14.609%
+1 7.497%
+*/
 const int DX = 763 - 852;
 const int DY = 347 - 202;
 const int DX1 = 743 - 763;
@@ -443,8 +483,9 @@ public:
       for (i = 0; i < NT; i++) {
         m_text_view[i].get_buffer()->set_text(m_out[i]);
       }
-      highlightText(successProbability(best.getPossibleAfter()) <
-                    HIGHLIGHT_SUCCESS);
+      if (!best.isInvalid())
+        highlightText(successProbability(best.getPossibleAfter()) <
+                      HIGHLIGHT_SUCCESS);
     }
     return !DEBUG_MODE;
   }

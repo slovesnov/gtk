@@ -15,7 +15,7 @@
 #include <unordered_map>
 #endif
 
-const int NF = 0;
+const int NF = -1;
 const bool DEBUG_MODE = NF != -1;
 
 // allow any number of moves 0-3
@@ -570,13 +570,12 @@ int countPossible(const int field[N][N]) {
 
 VInfo possibleMoves(const Figure &f, const VFigure &recent,
                     const int field[N][N], bool fromEstimate = false) {
-  int i, j, es, x, y, k, l, _x, _y, end, fi, possible;
+  int i, j, e, x, y, l, end, possible;
   int fill[N][N], after[N][N];
-  VInfo ea;
-  bool bb;
+  VInfo vi;
   for (j = 0; j <= N - f.height; j++) {
     for (i = 0; i <= N - f.width; i++) {
-      es = 0;
+      e = 0;
       copy(field, fill);
       for (auto &xy : f.xy) {
         x = xy[0] + i;
@@ -584,7 +583,7 @@ VInfo possibleMoves(const Figure &f, const VFigure &recent,
         if (field[y][x]) {
           goto l183;
         }
-        es += (x == 0 ? 1 : field[y][x - 1]) +
+        e += (x == 0 ? 1 : field[y][x - 1]) +
               (x == N - 1 ? 1 : field[y][x + 1]) +
               (y == 0 ? 1 : field[y - 1][x]) +
               (y == N - 1 ? 1 : field[y + 1][x]);
@@ -592,20 +591,20 @@ VInfo possibleMoves(const Figure &f, const VFigure &recent,
       }
 
       l = resetAndGetLines(i, j, f, fill, after);
-      fi = 0;
-      end = recent.empty() ? 0 : 1;
-      for (auto &e : recent) {
-        fi++;
-        if (end && hasPossibleMoves(e, after)) {
-          end = 0;
+      if (!fromEstimate) {
+        if (recent.empty()) {
+          pri;
         }
+        end = !std::any_of(recent.begin(), recent.end(),
+                           [&after](auto &e) { return hasPossibleMoves(e, after); });
       }
-      possible = !fromEstimate || fi == 0 ? countPossible(after) : InvalidValue;
-      ea.push_back(Info(i, j, es, l, end, possible, after));
+      possible =
+          !fromEstimate || recent.empty() ? countPossible(after) : InvalidValue;
+      vi.push_back(Info(i, j, e, l, end, possible, after));
     l183:;
     }
   }
-  return ea;
+  return vi;
 }
 
 VInfo possibleMoves(const Figure &f, const int field[N][N]) {

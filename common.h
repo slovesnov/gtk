@@ -192,15 +192,9 @@ struct Figure {
   }
 } ALL_FIGURES[ALL_COUNT];
 
-Figure *findFigureIt(std::string code) {
-  return std::find_if(std::begin(ALL_FIGURES), std::end(ALL_FIGURES),
-                      [&code](auto &e) { return e.code == code; });
-}
-
-Figure &findFigure(std::string code) { return *findFigureIt(code); }
-
 int findFigureIndex(std::string code) {
-  auto it = findFigureIt(code);
+  auto it = std::find_if(std::begin(ALL_FIGURES), std::end(ALL_FIGURES),
+                      [&code](auto &e) { return e.code == code; });
   return std::distance(std::begin(ALL_FIGURES), it);
 }
 

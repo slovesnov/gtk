@@ -460,9 +460,9 @@ public:
   }
 
   void gets() {
-    int i, j, f = 0;
+    int i, j;
     bool log = 0;
-    std::string s1, fields, name, cd, mincode, s, se;
+    std::string s1, name, cd, mincode, s, se;
     for (auto &a : m_out) {
       a = "";
     }
@@ -478,38 +478,35 @@ public:
     }
     m_drawing_area.queue_draw();
 
-    for (auto &f : gfigureIndex) {
-      if (f != ALL_COUNT) {
-        auto &a = ALL_FIGURES[f];
+    auto ne = getNonEmptyIndex();
 
-        VInt recent;
-        for (auto &n : gfigureIndex) {
-          if (n != ALL_COUNT && n != f) {
-            recent.push_back(n);
-          }
-        }
+    for (auto &f : ne) {
+      auto &a = ALL_FIGURES[f];
 
-        auto v = possibleMoves(a, recent, field);
-        std::sort(v.begin(), v.end());
-        s += a.name + "\n";
-        for (auto &e : v) {
-          s += e.to_string() + "\n";
+      VInt recent;
+      for (auto &n : ne) {
+        if (n != f) {
+          recent.push_back(n);
         }
       }
+
+      auto v = possibleMoves(a, recent, field);
+      std::sort(v.begin(), v.end());
+      s += a.name + "\n";
+      for (auto &e : v) {
+        s += e.to_string() + "\n";
+      }
     }
-    f = countFill(field);
-    fields = to_string(field);
     int possible = countPossible(field);
 
-    i = std::count_if(gfigureIndex.begin(), gfigureIndex.end(),
-                      [](auto e) { return e != ALL_COUNT; });
-
-    if (i == 3) {
+    if (ne.size() == 3) {
+      int f = countFill(field);
       s1 = nonEmptyFiguresString();
       if (f == 0) {
         newGame();
         startFromEmptyField = 1;
       }
+      std::string fields = to_string(field);
       if (s1 != m_prev && fields != m_prevfields) {
         m_prev = s1;
         m_prevfields = fields;
@@ -561,14 +558,9 @@ public:
     VString vs = {
         std::format("figures {}", total),
         std::format("squares {}", toString(squares, ',')),
-        // fillString(f),
-        // possibleString(possible, 1),
     };
 
-    s += join(vs, '\n', 1);
-    s += possibleStatString();
-    s += fillStatString();
-    s += se;
+    s += join(vs, '\n', 1) + possibleStatString() + fillStatString() + se;
     m_out[0] = s;
     m_out[1] = bestString();
     m_out[2] = std::format(
@@ -605,7 +597,6 @@ public:
   std::string m_title;
   Glib::RefPtr<Gtk::TextTag> m_highlight_tag;
 };
-
 
 int main(int argc, char *argv[]) {
   auto app = Gtk::Application::create("com.example.myapp"

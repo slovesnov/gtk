@@ -450,7 +450,6 @@ public:
     }
     m_drawing_area.queue_draw();
 
-    // i = 0;
     for (auto &f : gfigureIndex) {
       if (f != ALL_COUNT) {
         auto &a = ALL_FIGURES[f];
@@ -462,7 +461,6 @@ public:
           }
         }
 
-        pr(recent.size())
         auto v = possibleMoves(a, recent, field);
         std::sort(v.begin(), v.end());
         s += a.name + "\n";
@@ -470,7 +468,6 @@ public:
           s += e.to_string() + "\n";
         }
       }
-      // i++;
     }
     f = countFill(field);
     fields = to_string(field);

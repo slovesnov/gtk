@@ -594,21 +594,11 @@ VInfo possibleMoves(const Figure &f, const VFigure &recent,
       l = resetAndGetLines(i, j, f, fill, after);
       fi = 0;
       end = recent.empty() ? 0 : 1;
-      bb = i == 2 && j == 4 && recent.size() == 2;
-      if (bb) {
-        for (auto &q : recent) {
-          pr(q.code)
-        }
-        pr(end, recent.size(), "\n", to_string(after))
-      }
       for (auto &e : recent) {
         fi++;
         if (end && hasPossibleMoves(e, after)) {
           end = 0;
         }
-      }
-      if (bb) {
-        pr(end)
       }
       possible = !fromEstimate || fi == 0 ? countPossible(after) : InvalidValue;
       ea.push_back(Info(i, j, es, l, end, possible, after));

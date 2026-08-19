@@ -482,10 +482,10 @@ public:
       if (f != ALL_COUNT) {
         auto &a = ALL_FIGURES[f];
 
-        VFigure recent;
+        VInt recent;
         for (auto &n : gfigureIndex) {
           if (n != ALL_COUNT && n != f) {
-            recent.push_back(ALL_FIGURES[n]);
+            recent.push_back(n);
           }
         }
 

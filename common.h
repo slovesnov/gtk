@@ -192,8 +192,6 @@ struct Figure {
   }
 } ALL_FIGURES[ALL_COUNT];
 
-using VFigure = std::vector<Figure>;
-
 Figure *findFigureIt(std::string code) {
   return std::find_if(std::begin(ALL_FIGURES), std::end(ALL_FIGURES),
                       [&code](auto &e) { return e.code == code; });
@@ -572,7 +570,7 @@ int countPossible(const int field[N][N]) {
   }
 }
 
-VInfo possibleMoves(const Figure &f, const VFigure &recent,
+VInfo possibleMoves(const Figure &f, const VInt &recent,
                     const int field[N][N], bool fromEstimate = false) {
   int i, j, e, x, y, l, possible, fill[N][N], after[N][N];
   bool end;
@@ -599,7 +597,7 @@ VInfo possibleMoves(const Figure &f, const VFigure &recent,
         end = recent.empty() ? false
                              : !std::any_of(recent.begin(), recent.end(),
                                             [&after](auto &e) {
-                                              return hasPossibleMoves(e, after);
+                                              return hasPossibleMoves(ALL_FIGURES[e], after);
                                             });
       }
       possible =

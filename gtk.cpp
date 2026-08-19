@@ -40,8 +40,15 @@ const std::vector<uint32_t> F_COLOR[] = {
     {0xffab2578}, {0xff59ed9e, 0xff45dcf7, 0xff7676ff, 0xffffb945, 0xfff65ae9}};
 const uint32_t EMPTY_COLOR[] = {0xff9c2469, 0xff952463, 0xff8e245c, 0xff872355,
                                 0xff7f224d, 0xff782247, 0xff702240, 0xff692139};
-const uint32_t POSSIBLE_COLOR[] = {0xff59ed9e, 0xffffb945, 0xff45dcf7,
-                                   0xff45dcf7, 0xff7676ff, 0xfff65ae9};
+const uint32_t POSSIBLE_COLOR[] = {
+    0xff59ed9e, 0xffffb945, 0xff45dcf7, 0xff45dcf7, 0xff7676ff, 0xfff65ae9,
+    0xfff9a8f2, // violet+
+    0xff7b978d, // violet@
+    0xffb6a93a, // blue@
+    0xff7fc63b, // blue@
+    0xff93c89f, // blue@
+    0xffed57e0, // violet@
+};
 
 uint32_t BG_COLOR = 0xE6D8AD;
 // default color fo rebug mode
@@ -431,7 +438,7 @@ public:
   void gets() {
     int i, j, f = 0;
     bool log = 0;
-    std::string s1, fields, name;
+    std::string s1, fields, name, cd, mincode;
     for (auto &a : m_out) {
       a = "";
     }
@@ -445,26 +452,19 @@ public:
 
     i = 0;
     for (auto &f : gfigureIndex) {
-      auto &a = ALL_FIGURES[f];
-      if (a.isEmpty()) {
-        name = "";
-      } else {
-        name = a.name;
-        s1 += " ";
-        s += s1;
+      if (f != ALL_COUNT) {
+        auto &a = ALL_FIGURES[f];
+
         VFigure recent;
-        j = 0;
-        for (auto &f : gfigureIndex) {
-          auto &a = ALL_FIGURES[f];
-          if (!a.isEmpty() && j != i) {
-            recent.push_back(a);
+        for (auto &n : gfigureIndex) {
+          if (n != ALL_COUNT && n != i) {
+            recent.push_back(ALL_FIGURES[n]);
           }
-          j++;
         }
 
-        s += "\n";
         auto v = possibleMoves(a, recent, field);
         std::sort(v.begin(), v.end());
+        s += a.name + "\n";
         for (auto &e : v) {
           s += e.to_string() + "\n";
         }
@@ -491,7 +491,6 @@ public:
         addStatistics(possibleStatistics, possible);
         addStatistics(fillStatistics, f);
 
-        std::string cd, mincode, name;
         for (auto &n : gfigureIndex) {
           auto &fi = ALL_FIGURES[n];
           mincode = fi.mincode;
@@ -738,15 +737,15 @@ std::string get_screenshot_winapi() {
   if (x + STEP * (N - 1) >= width || y + STEP * (N - 1) >= height)
     return std::format("bounds error {}", __LINE__);
 
+  hs = "";
   l = 0;
   for (j = 0; j < N; j++) {
     for (i = 0; i < N; i++) {
       uint32_t k = getPixelColor(x + i * STEP, y + j * STEP);
       field[j][i] = b = k != EMPTY_COLOR[j];
-      if (b) {
-        if (!std::ranges::contains(POSSIBLE_COLOR, k)) {
-          l++;
-        }
+      if (b && !std::ranges::contains(POSSIBLE_COLOR, k)) {
+        hs += std::format("{}{} 0x{:x}\n", i, j, k);
+        l++;
       }
     }
   }

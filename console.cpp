@@ -18,5 +18,5 @@ int main() {
     pr(ALL_FIGURES[a].name)
   }
   pr(to_string(field));
-  // pr(bestString());
+   pr(bestString());
 }

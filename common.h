@@ -15,11 +15,21 @@
 #include <unordered_map>
 #endif
 
-const int NF = -1;
+const int NF = 0;
 const bool DEBUG_MODE = NF != -1;
 
 // allow any number of moves 0-3
 const std::string fixed_field[] = {
+  R"(00000011
+11111010
+11101001
+11111010
+11110010
+00000000
+01101011
+11101011
+001 111-111 010-111 111 111)",
+
     R"(11101101
 00000110
 00000000
@@ -62,7 +72,7 @@ const std::string ARROW = "→";
 #else
 const std::string ARROW = "=";
 #endif
-const char SEPA = '-';
+const std::string ALWAYS_GAME_OVER = "always game over";
 
 const std::unordered_map<std::string, std::string> MAP = {
     {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
@@ -73,6 +83,7 @@ bool startFromEmptyField = 0;
 VInt gfigureIndex;
 int field[N][N];
 std::set<uint32_t> set2;
+std::string hs;
 #ifdef USE_SKIPC
 int skipc2;
 #endif
@@ -107,13 +118,10 @@ std::string possibleString(int i, const int o) {
 }
 
 struct Figure {
-  // VVInt figure;
   std::vector<std::array<int, 2>> xy; // position of filled squares
   VInt xfill, yfill;                  // filled squares axis
   int width, height;
   std::string code, mincode, name;
-  bool isEmpty() { return width == 0; }
-  void setEmpty() { width = 0; }
 
   void set(std::string _code, std::string _mincode, VVInt f) {
     int x, y;
@@ -161,9 +169,6 @@ struct Figure {
 
   std::string to_string() {
     std::string s;
-    if (isEmpty()) {
-      return "empty";
-    }
     s = "xfill";
     for (auto &i : xfill) {
       s += ' ' + std::to_string(i);
@@ -181,7 +186,7 @@ struct Figure {
     // width,
     //                    height, s);
   }
-} ALL_FIGURES[ALL_COUNT], EMPTY;
+} ALL_FIGURES[ALL_COUNT];
 
 using VFigure = std::vector<Figure>;
 
@@ -365,6 +370,23 @@ int resetAndGetLines(int i, int j, const Figure &f, int fill[N][N],
   return l;
 }
 
+std::string join(const VString &vs, char sep = '\n', bool after = 0) {
+  std::string s;
+  bool f = 1;
+  for (auto &a : vs) {
+    if (f) {
+      f = 0;
+    } else {
+      s += sep;
+    }
+    s += a;
+  }
+  if (after) {
+    s += sep;
+  }
+  return s;
+}
+
 std::string to_string(const int field[N][N]) {
   std::string s;
   int i, j;
@@ -377,20 +399,16 @@ std::string to_string(const int field[N][N]) {
   return s;
 }
 
-std::string to_string(const VVInt &a, int o = 1) {
-  std::string s;
-  bool f = 1;
+std::string to_string(const VVInt &a) {
+  VString v;
   for (auto &x : a) {
-    if (f) {
-      f = 0;
-    } else {
-      s += o ? ' ' : '\n';
-    }
+    std::string s;
     for (auto &e : x) {
       s += std::to_string(e);
     }
+    v.push_back(s);
   }
-  return s;
+  return join(v, ' ');
 }
 
 // returns false if move impossible
@@ -457,14 +475,12 @@ void from_string(const std::string &st, int field[N][N]) {
   pr(v.size());
 
   for (i = 0; i < 3; i++) {
-    pr(i, v[i]);
     gfigureIndex[i] = findFigureIndex(v[i]);
   }
 
   for (; i < v.size(); i += 2) {
     b = make_move(v[i][0] - '0', v[i][1] - '0',
                   ALL_FIGURES[gfigureIndex[v[i + 1][0] - '1']], field);
-    pr(b);
     if (!b) {
       pr1("error {} {}", v[i], v[i + 1]);
       exit(1);
@@ -714,23 +730,6 @@ std::string fillString(int i) {
   return std::format("fill {}/{}={:.2f}%", i, N * N, i * 100. / N / N);
 }
 
-std::string join(const VString &vs, char sep = '\n', bool after = 0) {
-  std::string s;
-  bool f = 1;
-  for (auto &a : vs) {
-    if (f) {
-      f = 0;
-    } else {
-      s += sep;
-    }
-    s += a;
-  }
-  if (after) {
-    s += sep;
-  }
-  return s;
-}
-
 VInt getNonEmptyIndex() {
   VInt vi;
   for (auto &i : gfigureIndex) {
@@ -746,7 +745,7 @@ std::string nonEmptyFiguresString() {
   for (auto a : getNonEmptyIndex()) {
     vs.push_back(ALL_FIGURES[a].code);
   }
-  return join(vs, SEPA);
+  return join(vs, '-');
 }
 
 void findBest() {
@@ -791,6 +790,9 @@ VInfo getPrizesInfo() {
 std::string getPrizesString() {
   std::string s;
   auto v = getPrizesInfo();
+  if (v.empty()) {
+    return ALWAYS_GAME_OVER;
+  }
   std::sort(v.begin(), v.end());
   for (auto &a : v) {
     s += a.prizeString() + "\n";
@@ -805,50 +807,47 @@ std::string bestString() {
   std::string s;
   auto start = std::chrono::steady_clock::now();
   VInt v = getNonEmptyIndex();
-
-  if (v.size() >= 1 && v.size() <= 3) {
-    s = to_string(field) + nonEmptyFiguresString();
-    auto &prev = previous[v.size()];
-    if (s == prev.code) {
-      best = prev.best;
-      return prev.out[1] + "\n" + gameTimeString();
-    }
-    prev.code = s;
-    s = "";
-
-    findBest();
-    if (best.isInvalid()) {
-      s = getPrizesString(); // also set best
-    }
-    if (best.isInvalid()) {
-      s = "always game over\n"; //'\n' needs
-    } else {
-      if (v.size() == 1) {
-        best.n[0] = 0;
-      } else {
-        s += std::string(same(v, field) ? "any order" : "order important") +
-             "\n";
-      }
-      //   s += best.movesString(v.size()) +
-      s += "after " + fillString(best.getFieldc()) + "\n" + "after " +
-           possibleString(best.getPossibleAfter(), 1) + "\n" + "now " +
-           fillString(countFill(field)) + "\n" + "now " +
-           possibleString(countPossible(field), 1) + "\n";
-    }
-    auto end = std::chrono::steady_clock::now();
-    auto elapsed =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    s += std::format("time {}ms", elapsed.count());
-    prev.out[1] = s; // without game time
-    s += "\n" + gameTimeString();
-#ifdef USE_SKIPC
-    // s += std::format("size {} {}", set2.size(), skipc2);
-#endif
-    prev.best = best;
-    return s;
-  } else {
+  if (v.empty() || v.size() > 3)
     return "";
+
+  s = to_string(field) + nonEmptyFiguresString();
+  auto &prev = previous[v.size()];
+  if (s == prev.code) {
+    best = prev.best;
+    return prev.out[1] + "\n" + gameTimeString();
   }
+  prev.code = s;
+  s = "";
+
+  findBest();
+  if (best.isInvalid()) {
+    s = getPrizesString(); // also set best
+  }
+  if (best.isInvalid()) {
+    s = ALWAYS_GAME_OVER + '\n'; //'\n' needs
+  } else {
+    if (v.size() == 1) {
+      best.n[0] = 0;
+    } else {
+      s += std::string(same(v, field) ? "any order" : "order important") + "\n";
+    }
+    s += "after " + fillString(best.getFieldc()) + "\n" + "after " +
+         possibleString(best.getPossibleAfter(), 1) + "\n" + "now " +
+         fillString(countFill(field)) + "\n" + "now " +
+         possibleString(countPossible(field), 1) + "\n";
+  }
+  auto end = std::chrono::steady_clock::now();
+  auto elapsed =
+      std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+  s += std::format("time {}ms", elapsed.count())+ (hs.empty()?"": '\n' + hs);
+  prev.out[1] = s; // without game time
+  s += '\n' + gameTimeString() ;
+
+#ifdef USE_SKIPC
+  // s += std::format("size {} {}", set2.size(), skipc2);
+#endif
+  prev.best = best;
+  return s;
 }
 
 VVInt reverseX(const VVInt &matrix) {
@@ -950,7 +949,6 @@ void init() {
   }
 
   InvalidInfo.setInvalid();
-  EMPTY.setEmpty();
   gfigureIndex.resize(3);
 
   // for gtk newGame() do it

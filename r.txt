@@ -1,6 +1,14 @@
+------- GTK MODE  -------
 cd e:/slovesno/gtk
 clear && g++ -std=c++23 gtk.cpp app.res `pkg-config gtkmm-4.0 --cflags --libs` -lgdi32 && ./a.exe
+time g++ -std=c++23 gtk.cpp app.res `pkg-config gtkmm-4.0 --cflags --libs` -lgdi32
 ./a.exe
+
+------- CONSOLE MODE  -------
+clear && g++ -std=c++23 console.cpp -o console.exe && ./console.exe
+g++ console.cpp -o console.exe && ./console.exe
+time g++ console.cpp -o console.exe && ./console.exe
+
 
 //-lgdi32 not need
 g++ -std=c++23 gtk.cpp app.res -o gtk.exe `pkg-config gtkmm-4.0 --cflags --libs` -mwindows
@@ -16,6 +24,3 @@ https://www.iconsdb.com/royal-blue-icons/dice-icon.html
 
 https://perchance.org/ai-icon-generator
 
-CONSOLE MODE
-clear && g++ -std=c++23 console.cpp -o console.exe && ./console.exe
-g++ console.cpp -o console.exe && ./console.exe

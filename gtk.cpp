@@ -36,10 +36,10 @@ const int SMALL_SQUARE_SIZE = 100;
 const int DRAW_AREA_SQUARE = 21;
 cairo_rectangle_int_t picture_rectangle;
 // ABGR
-const std::vector<uint32_t> FC[] = {
+const std::vector<uint32_t> F_COLOR[] = {
     {0xffab2578}, {0xff59ed9e, 0xff45dcf7, 0xff7676ff, 0xffffb945, 0xfff65ae9}};
-const uint32_t EMPTY[] = {0xff9c2469, 0xff952463, 0xff8e245c, 0xff872355,
-                          0xff7f224d, 0xff782247, 0xff702240, 0xff692139};
+const uint32_t EMPTY_COLOR[] = {0xff9c2469, 0xff952463, 0xff8e245c, 0xff872355,
+                                0xff7f224d, 0xff782247, 0xff702240, 0xff692139};
 const uint32_t POSSIBLE_COLOR[] = {0xff59ed9e, 0xffffb945, 0xff45dcf7,
                                    0xff45dcf7, 0xff7676ff, 0xfff65ae9};
 
@@ -60,7 +60,6 @@ std::string dateTimeString(int o = 0);
 std::string timeString() { return dateTimeString(1); }
 std::string possibleStatString();
 std::string fillStatString();
-std::string toString(int t, char separator = ' ', int digits = 3);
 std::string savePng();
 Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int o);
 std::string get_screenshot_winapi();
@@ -244,12 +243,7 @@ public:
       cr->rectangle(0, 0, width, height);
       cr->fill();
     } else {
-      VFigure vf;
-      for (auto &f : figures) {
-        if (!f.empty()) {
-          vf.push_back(f);
-        }
-      }
+      VInt vi = getNonEmptyIndex();
 
       VInt nf[N][N];
 
@@ -273,21 +267,17 @@ public:
         cr->fill();
       }
 
-      for (n = 0; n < vf.size(); n++) {
+      for (n = 0; n < vi.size(); n++) {
         i = best.gx(n);
         j = best.gy(n);
         if (i != InvalidValue) {
-          auto f = vf[best.n[n]];
-          for (y = 0; y < f.size(); y++) {
-            for (x = 0; x < f[y].size(); x++) {
-              if (f[y][x]) {
-                auto &v = nf[j + y][i + x];
-                v.push_back(n);
-                if (field[j + y][i + x] &&
-                    !std::ranges::contains(v, BG_COLOR)) {
-                  v.push_back(BG_COLOR);
-                }
-              }
+          for (auto &xy : ALL_FIGURES[vi[best.n[n]]].xy) {
+            x = xy[0];
+            y = xy[1];
+            auto &v = nf[j + y][i + x];
+            v.push_back(n);
+            if (field[j + y][i + x] && !std::ranges::contains(v, BG_COLOR)) {
+              v.push_back(BG_COLOR);
             }
           }
         }
@@ -396,14 +386,9 @@ public:
     //  std::ofstream file(LOG_FILE, std::ios::out | std::ios::trunc); //w+
     std::ofstream file(LOG_FILE, std::ios::app);
     std::string m(5, '-');
-    file << "\n" << m << " " << dateTimeString() << " " << m << "\n";
-    VFigure v;
-    for (auto &a : figures) {
-      if (!a.empty()) {
-        v.push_back(a);
-      }
-    }
-    file << to_string(field) + to_string(v) << "\n";
+    file << "\n"
+         << m << " " << dateTimeString() << " " << m << "\n"
+         << to_string(field) + nonEmptyFiguresString() << "\n";
 
     for (auto &a : m_out) {
       file << a;
@@ -415,7 +400,7 @@ public:
     int i;
     if (timer) {
       if (DEBUG_MODE) {
-        from_string(fixed_field[NF], field, figures);
+        from_string(fixed_field[NF], field);
         m_out[1] = bestString();
         m_drawing_area.queue_draw();
       } else {
@@ -446,8 +431,7 @@ public:
   void gets() {
     int i, j, f = 0;
     bool log = 0;
-    std::string s1, fields, s2;
-    VString vs;
+    std::string s1, fields, name;
     for (auto &a : m_out) {
       a = "";
     }
@@ -460,49 +444,19 @@ public:
     m_drawing_area.queue_draw();
 
     i = 0;
-    for (auto &a : figures) {
-      if (a.empty()) {
-        s2 = "";
+    for (auto &f : gfigureIndex) {
+      auto &a = ALL_FIGURES[f];
+      if (a.isEmpty()) {
+        name = "";
       } else {
-        s1 = "";
-        // recognize lines, squares
-        bool all = std::all_of(std::begin(a), std::end(a),
-                               [](auto x) { return x.size() == 1; });
-        if (all) {
-          s1 += a.size() == 1 ? "dot" : std::to_string(a.size()) /*+ "V"*/;
-        }
-        if (s1.empty()) {
-          all = std::all_of(std::begin(a), std::end(a), [](auto x) {
-            return std::all_of(std::begin(x), std::end(x),
-                               [](auto x) { return x == 1; });
-          });
-          if (all) {
-            s1 += a.size() == 1 ? std::to_string(a[0].size()) /*+ "H"*/
-                                : std::format("square{}", a.size());
-            if (a.size() < 1 || a.size() > 3) { // was square5
-              best.setInvalid();
-              m_out[0] = "unrecognized1";
-              return;
-            }
-          }
-        }
-        if (s1.empty()) {
-          auto c = code(a);
-          try {
-            s1 = MAP.at(c);
-          } catch (const std::out_of_range &e) {
-            best.setInvalid();
-            m_out[0] = "unrecognized";
-            return;
-          }
-        }
-        s2 = s1;
+        name = a.name;
         s1 += " ";
         s += s1;
         VFigure recent;
         j = 0;
-        for (auto &a : figures) {
-          if (!a.empty() && j != i) {
+        for (auto &f : gfigureIndex) {
+          auto &a = ALL_FIGURES[f];
+          if (!a.isEmpty() && j != i) {
             recent.push_back(a);
           }
           j++;
@@ -516,16 +470,16 @@ public:
         }
       }
       i++;
-      vs.push_back(s2);
     }
     f = countFill(field);
     fields = to_string(field);
     int possible = countPossible(field);
 
-    i = std::count_if(vs.begin(), vs.end(), [](auto e) { return !e.empty(); });
+    i = std::count_if(gfigureIndex.begin(), gfigureIndex.end(),
+                      [](auto e) { return e != ALL_COUNT; });
 
     if (i == 3) {
-      s1 = join(vs);
+      s1 = nonEmptyFiguresString();
       if (f == 0) {
         newGame();
         startFromEmptyField = 1;
@@ -537,17 +491,18 @@ public:
         addStatistics(possibleStatistics, possible);
         addStatistics(fillStatistics, f);
 
-        i = 0;
-        std::string cd, mincode;
-        for (auto &e : vs) {
-          mincode = code(figures[i]);
-          cd = to_string(figures[i]);
+        std::string cd, mincode, name;
+        for (auto &n : gfigureIndex) {
+          auto &fi = ALL_FIGURES[n];
+          mincode = fi.mincode;
+          cd = fi.code;
+          name = fi.name;
 
           auto it =
               std::find_if(m_figureStatistics.begin(), m_figureStatistics.end(),
                            [&mincode](auto x) { return x.mincode == mincode; });
           if (it == m_figureStatistics.end()) {
-            m_figureStatistics.push_back(FigureStatistics(e, mincode, cd));
+            m_figureStatistics.push_back(FigureStatistics(name, mincode, cd));
           } else {
             auto it1 = std::find_if(it->v.begin(), it->v.end(),
                                     [&cd](auto x) { return x.first == cd; });
@@ -556,7 +511,6 @@ public:
             } else
               it1->second++;
           }
-          i++;
         }
       }
     }
@@ -579,19 +533,14 @@ public:
     for (const auto &e : m_figureStatistics)
       s += e.to_string(total, max);
 
-    // auto elapsed = std::chrono::steady_clock::now() - gameBegin;
-    // auto duration_sec =
-    //     std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
-    // std::chrono::seconds sec{duration_sec};
-
-    vs = {
+    VString vs = {
         std::format("figures {}", total),
         std::format("squares {}", toString(squares, ',')),
         // fillString(f),
         // possibleString(possible, 1),
     };
-    s += join(vs);
 
+    s += join(vs, '\n', 1);
     s += possibleStatString();
     s += fillStatString();
     s += se;
@@ -660,7 +609,7 @@ PointInfo getBase(int sx, int width, int sy, int height, int o) {
   for (y = 0; y < height; y++) {
     auto p = gp + (y + sy) * gtotalWidth + sx;
     for (x = 0; x < width; x++, p++) {
-      if (std::ranges::contains(FC[o], *p)) {
+      if (std::ranges::contains(F_COLOR[o], *p)) {
         return {x + sx, y + sy, *p};
       }
     }
@@ -775,7 +724,8 @@ std::string get_screenshot_winapi() {
   gtotalWidth = width;
 
   PointInfo pa;
-  int x, y, i, j, k, l, b, c;
+  int x, y, i, j, k, l, n, b, c;
+  std::string s;
   pa = getBase(0, width, 0, height, 0);
 
   x = pa.x;
@@ -792,7 +742,7 @@ std::string get_screenshot_winapi() {
   for (j = 0; j < N; j++) {
     for (i = 0; i < N; i++) {
       uint32_t k = getPixelColor(x + i * STEP, y + j * STEP);
-      field[j][i] = b = k != EMPTY[j];
+      field[j][i] = b = k != EMPTY_COLOR[j];
       if (b) {
         if (!std::ranges::contains(POSSIBLE_COLOR, k)) {
           l++;
@@ -821,102 +771,57 @@ std::string get_screenshot_winapi() {
   picture_rectangle = {i, j, 440, 730};
 
   l = 0;
-  for (auto &a : figures) {
-    a.clear();
+  for (n = 0; n < 3; n++, b += SX) {
     pa = getBase(b, SMALL_SQUARE_SIZE, c, SMALL_SQUARE_SIZE, 1);
-    if (pa.x != -1) {
-      pa.y += 9;
-      pa.color = getPixelColor(pa.x, pa.y);
-      figure_color[l++] = pa.color; // only valid
+    if (pa.x == -1) {
+      gfigureIndex[n] = ALL_COUNT;
+      continue;
+    }
+    pa.y += 9;
+    pa.color = getPixelColor(pa.x, pa.y);
+    figure_color[l++] = pa.color; // only valid
 
-      y = pa.y;
-      for (j = 0; j < 5; j++, y += STEPS) {
-        VInt q;
-        x = b + (pa.x - b) % STEPS;
-        for (i = 0; i < 5; i++, x += STEPS) {
-          k = colorDifference(pa.color, getPixelColor(x, y));
-          q.push_back(k < 77 ? 1 : 0);
-        }
-
-        if (std::ranges::find(q, 1) != q.end())
-          a.push_back(q);
-        else
-          break;
+    VVInt a;
+    y = pa.y;
+    for (j = 0; j < 5; j++, y += STEPS) {
+      VInt q;
+      x = b + (pa.x - b) % STEPS;
+      for (i = 0; i < 5; i++, x += STEPS) {
+        k = colorDifference(pa.color, getPixelColor(x, y));
+        q.push_back(k < 77 ? 1 : 0);
       }
 
-      x = N, y = -1;
-      for (auto &numbers : a) {
-        auto first_it = std::find(numbers.begin(), numbers.end(), 1);
-        auto last_rit = std::find(numbers.rbegin(), numbers.rend(), 1);
+      if (std::ranges::find(q, 1) != q.end())
+        a.push_back(q);
+      else
+        break;
+    }
 
-        int first_index = std::distance(numbers.begin(), first_it);
-        if (x > first_index) {
-          x = first_index;
-        }
-        int last_index =
-            (numbers.size() - 1) - std::distance(numbers.rbegin(), last_rit);
-        if (y < last_index) {
-          y = last_index;
-        }
+    x = N, y = -1;
+    for (auto &numbers : a) {
+      auto first_it = std::find(numbers.begin(), numbers.end(), 1);
+      auto last_rit = std::find(numbers.rbegin(), numbers.rend(), 1);
+
+      int first_index = std::distance(numbers.begin(), first_it);
+      if (x > first_index) {
+        x = first_index;
       }
-
-      for (auto &numbers : a) {
-        VInt sub_vector(numbers.begin() + x, numbers.begin() + y + 1);
-        numbers = sub_vector;
+      int last_index =
+          (numbers.size() - 1) - std::distance(numbers.rbegin(), last_rit);
+      if (y < last_index) {
+        y = last_index;
       }
     }
-    b += SX;
+
+    for (auto &numbers : a) {
+      VInt sub_vector(numbers.begin() + x, numbers.begin() + y + 1);
+      numbers = sub_vector;
+    }
+
+    s = to_string(a);
+    gfigureIndex[n] = findFigureIndex(s);
   }
   return "";
-}
-
-std::string invert(const Figure &a, bool x, bool y) {
-  return to_string(invertFigure(a, x, y));
-}
-
-std::string toString(int t, char separator, int digits) {
-  // std::fixed to prevents scientific notation t=1234567.890123 b=1.23457e
-  // +06
-  std::stringstream c;
-  c << std::fixed << t;
-  std::string s, e, b = c.str();
-  std::string::size_type p, p1;
-  p = b.find('.');
-  if (p != std::string::npos) {
-    for (p1 = b.length() - 1; p1 > p && b[p1] == '0'; p1--)
-      ;            //"3.875000"->"3.875"
-    if (p != p1) { //"1.000" -> "1"
-      e = b.substr(p, p1 - p + 1);
-    }
-    b = b.substr(0, p);
-  }
-  bool negative = std::is_signed<int>::value && t < 0;
-  unsigned i = b.length() - 1;
-  for (char a : b) {
-    s += a;
-    if (i % digits == 0 && i != 0 && (!negative || i != b.length() - 1)) {
-      s += separator;
-    }
-    i--;
-  }
-  return s + e;
-}
-
-std::string code(const Figure &a) {
-  int x, y, i;
-  auto r = rotate(a);
-  std::string c, min = "2";
-  for (x = 0; x < 2; x++) {
-    for (y = 0; y < 2; y++) {
-      for (i = 0; i < 2; i++) {
-        c = invert(i ? r : a, x, y);
-        if (c < min) {
-          min = c;
-        }
-      }
-    }
-  }
-  return min;
 }
 
 std::string possibleStatString() {

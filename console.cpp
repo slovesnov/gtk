@@ -8,6 +8,15 @@ g++ console.cpp -o console.exe && ./console.exe
 int main() {
   int i;
   init();
-  from_string(fixed_field[NF], field, figures);
-  pr(bestString());
+
+  // for (auto &a : ALL_FIGURES) {
+  //   pr(a.to_string());
+  // }
+
+  from_string(fixed_field[NF], field);
+  for (auto a : gfigureIndex) {
+    pr(ALL_FIGURES[a].name)
+  }
+  pr(to_string(field));
+  // pr(bestString());
 }

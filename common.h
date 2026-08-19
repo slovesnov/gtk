@@ -30,8 +30,15 @@ const std::string fixed_field[] = {
 10000011
 1 1 1-01 01 11-11111
 )",
-    R"(00000000
-    11101001 11100001 10000001 11010000 11100000 00110000 10100011 111 111 111 -
+    R"(
+    00000000
+    11101001 
+    11100001 
+    10000001 
+    11010000 
+    11100000 
+    00110000 
+    10100011 111 111 111 -
     1 -
     111 111 111 
     70_2
@@ -40,8 +47,7 @@ const std::string fixed_field[] = {
 static_assert(NF >= -1 && NF < int(std::size(fixed_field)));
 
 using VInt = std::vector<int>;
-using Figure = std::vector<VInt>;
-using VFigure = std::vector<Figure>;
+using VVInt = std::vector<VInt>;
 using VString = std::vector<std::string>;
 using VPIntInt = std::vector<std::pair<int, int>>;
 
@@ -50,18 +56,22 @@ const int NT = 3;
 const int ADD_INDEX = 1;
 const int InvalidValue = -1;
 const int ALL_COUNT = 39;
-const Figure DOT = {{1}};
+const int DOT_INDEX = ALL_COUNT - 1;
 #ifdef GTKMM_MAJOR_VERSION
 const std::string ARROW = "→";
 #else
 const std::string ARROW = "=";
 #endif
+const char SEPA = '-';
+
+const std::unordered_map<std::string, std::string> MAP = {
+    {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
+    {"101 111", "π"},  {"01 11", "corner"}, {"001 001 111", "CORNER"}};
 
 std::chrono::steady_clock::time_point gameBegin;
 bool startFromEmptyField = 0;
-VInt figureIndex;
+VInt gfigureIndex;
 int field[N][N];
-Figure figures[3];
 std::set<uint32_t> set2;
 #ifdef USE_SKIPC
 int skipc2;
@@ -96,10 +106,96 @@ std::string possibleString(int i, const int o) {
     return std::format("{} {:.1f}%", i, d);
 }
 
-struct HFigure {
-  Figure figure;
-  std::string string;
-} ALL_EXCEPT_DOT[ALL_COUNT - 1];
+struct Figure {
+  // VVInt figure;
+  std::vector<std::array<int, 2>> xy; // position of filled squares
+  VInt xfill, yfill;                  // filled squares axis
+  int width, height;
+  std::string code, mincode, name;
+  bool isEmpty() { return width == 0; }
+  void setEmpty() { width = 0; }
+
+  void set(std::string _code, std::string _mincode, VVInt f) {
+    int x, y;
+    std::set<int> sx, sy;
+    std::string s;
+    bool all;
+    code = _code;
+    mincode = _mincode;
+    width = f[0].size();
+    height = f.size();
+    for (y = 0; y < height; y++) {
+      for (x = 0; x < width; x++) {
+        if (f[y][x]) {
+          xy.push_back({x, y});
+          sx.insert(x);
+          sy.insert(y);
+        }
+      }
+    }
+    xfill.assign(sx.begin(), sx.end());
+    yfill.assign(sy.begin(), sy.end());
+
+    // recognize lines, squares
+    all = std::all_of(std::begin(f), std::end(f),
+                      [](auto x) { return x.size() == 1; });
+    if (all) {
+      name = f.size() == 1 ? "dot" : std::to_string(f.size()) /*+ "V"*/;
+    } else {
+      all = std::all_of(std::begin(f), std::end(f), [](auto x) {
+        return std::all_of(std::begin(x), std::end(x),
+                           [](auto x) { return x == 1; });
+      });
+      if (all) {
+        name = f.size() == 1 ? std::to_string(f[0].size()) /*+ "H"*/
+                             : std::format("square{}", f.size());
+      } else {
+        try {
+          name = MAP.at(mincode);
+        } catch (const std::out_of_range &e) {
+          name = "invalid name";
+        }
+      }
+    }
+  }
+
+  std::string to_string() {
+    std::string s;
+    if (isEmpty()) {
+      return "empty";
+    }
+    s = "xfill";
+    for (auto &i : xfill) {
+      s += ' ' + std::to_string(i);
+    }
+    s += " yfill";
+    for (auto &i : yfill) {
+      s += ' ' + std::to_string(i);
+    }
+    s += " xy";
+    for (auto &i : xy) {
+      s += std::format(" {}{}", i[0], i[1]);
+    }
+    return std::format("{} {} {}x{} {}", name, code, width, height, s);
+    // return std::format("code{} mincode{} size{}{} {}", code, mincode,
+    // width,
+    //                    height, s);
+  }
+} ALL_FIGURES[ALL_COUNT], EMPTY;
+
+using VFigure = std::vector<Figure>;
+
+Figure *findFigureIt(std::string code) {
+  return std::find_if(std::begin(ALL_FIGURES), std::end(ALL_FIGURES),
+                      [&code](auto &e) { return e.code == code; });
+}
+
+Figure &findFigure(std::string code) { return *findFigureIt(code); }
+
+int findFigureIndex(std::string code) {
+  auto it = findFigureIt(code);
+  return std::distance(std::begin(ALL_FIGURES), it);
+}
 
 struct Info {
   int x, y, x1, y1, x2, y2, lines, end, field[N][N], n[3], nlines[3], prize_x,
@@ -205,10 +301,6 @@ struct Prev {
   Info best;
 } previous[4];
 
-const std::unordered_map<std::string, std::string> MAP = {
-    {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
-    {"101 111", "π"},  {"01 11", "corner"}, {"001 001 111", "CORNER"}};
-
 #define PRINT(fmt, ...)                                                        \
   std::cout << std::format(fmt " {}:{}\n" __VA_OPT__(, )                       \
                                __VA_ARGS__ __VA_OPT__(, )                      \
@@ -242,45 +334,13 @@ void print_line_helper(std::source_location loc, Args &&...args) {
 #define pr1 PRINT
 #define pri PRINT_LINE1("")
 
-void from_string(const std::string &s, Figure &f) {
-  VInt v;
-  f.clear();
-  for (auto &a : s) {
-    if (strchr("01", a)) {
-      v.push_back(a - '0');
-    } else {
-      f.push_back(v);
-      v.clear();
-    }
-  }
-  f.push_back(v);
-}
-
-// returns false if move impossible
-bool make_move(int i, int j, const Figure &f, int field[N][N]) {
-  int _x, _y, x, y, l;
-  int fill[N][N], after[N][N];
-  std::set<int> xa, ya;
-
-  copy(field, fill);
-  for (_y = 0; _y < f.size(); _y++) {
-    for (_x = 0; _x < f[_y].size(); _x++) {
-      if (f[_y][_x]) {
-        x = _x + i;
-        y = _y + j;
-        if (field[y][x]) {
-          return false;
-        }
-        xa.insert(x);
-        ya.insert(y);
-        fill[y][x] = 1;
-      }
-    }
-  }
+int resetAndGetLines(int i, int j, const Figure &f, int fill[N][N],
+                     int after[N][N]) {
+  int l = 0, x, y;
   copy(fill, after);
 
-  l = 0;
-  for (auto &x : xa) {
+  for (auto &_x : f.xfill) {
+    x = _x + i;
     for (y = 0; y < N && fill[y][x]; y++)
       ;
     if (y == N) {
@@ -291,7 +351,8 @@ bool make_move(int i, int j, const Figure &f, int field[N][N]) {
     }
   }
 
-  for (auto &y : ya) {
+  for (auto &_y : f.yfill) {
+    y = _y + j;
     for (x = 0; x < N && fill[y][x]; x++)
       ;
     if (x == N) {
@@ -301,8 +362,7 @@ bool make_move(int i, int j, const Figure &f, int field[N][N]) {
       l++;
     }
   }
-  copy(after, field);
-  return true;
+  return l;
 }
 
 std::string to_string(const int field[N][N]) {
@@ -317,7 +377,7 @@ std::string to_string(const int field[N][N]) {
   return s;
 }
 
-std::string to_string(const Figure &a, int o = 1) {
+std::string to_string(const VVInt &a, int o = 1) {
   std::string s;
   bool f = 1;
   for (auto &x : a) {
@@ -333,21 +393,27 @@ std::string to_string(const Figure &a, int o = 1) {
   return s;
 }
 
-std::string to_string(const VFigure &vf) {
-  std::string s;
-  bool f = 1;
-  for (auto &a : vf) {
-    if (f) {
-      f = 0;
-    } else {
-      s += '-';
+// returns false if move impossible
+bool make_move(int i, int j, const Figure &f, int field[N][N]) {
+  int x, y, l;
+  int fill[N][N], after[N][N];
+
+  copy(field, fill);
+  for (auto &xy : f.xy) {
+    x = xy[0] + i;
+    y = xy[1] + j;
+    if (field[y][x]) {
+      return false;
     }
-    s += to_string(a);
+    fill[y][x] = 1;
   }
-  return s;
+  copy(fill, after);
+  resetAndGetLines(i, j, f, fill, after);
+  copy(after, field);
+  return true;
 }
 
-void from_string(const std::string &st, int field[N][N], Figure figures[3]) {
+void from_string(const std::string &st, int field[N][N]) {
   int i = 0, j = -1;
   bool b;
   VString v;
@@ -361,6 +427,7 @@ void from_string(const std::string &st, int field[N][N], Figure figures[3]) {
       }
     }
   }
+
   data = st.substr(j + 1);
   s1 = R"(([01][01 ]*[01]|1))";
   s2 = "\\s*-\\s*";
@@ -387,25 +454,22 @@ void from_string(const std::string &st, int field[N][N], Figure figures[3]) {
     }
     v.push_back(s);
   }
+  pr(v.size());
 
   for (i = 0; i < 3; i++) {
-    from_string(v[i], figures[i]);
+    pr(i, v[i]);
+    gfigureIndex[i] = findFigureIndex(v[i]);
   }
 
   for (; i < v.size(); i += 2) {
-    b = make_move(v[i][0] - '0', v[i][1] - '0', figures[v[i + 1][0] - '1'],
-                  field);
+    b = make_move(v[i][0] - '0', v[i][1] - '0',
+                  ALL_FIGURES[gfigureIndex[v[i + 1][0] - '1']], field);
+    pr(b);
     if (!b) {
       pr1("error {} {}", v[i], v[i + 1]);
       exit(1);
     }
   }
-  /*     if (moves){ // just view moves
-          for (i = 0; i < 3; i++){
-              figures[i].clear();
-          }
-      }
-   */
 }
 
 std::string gameTimeString() {
@@ -417,14 +481,12 @@ std::string gameTimeString() {
 }
 
 bool hasPossibleMoves(const Figure &f, const int field[N][N]) {
-  int i, j, x, y;
-  for (j = 0; j <= N - f.size(); j++) {
-    for (i = 0; i <= N - f[0].size(); i++) {
-      for (y = 0; y < f.size(); y++) {
-        for (x = 0; x < f[y].size(); x++) {
-          if (f[y][x] && field[y + j][x + i]) {
-            goto l99;
-          }
+  int i, j;
+  for (j = 0; j <= N - f.width; j++) {
+    for (i = 0; i <= N - f.height; i++) {
+      for (auto &xy : f.xy) {
+        if (field[xy[1] + j][xy[0] + i]) {
+          goto l99;
         }
       }
       return true;
@@ -478,13 +540,12 @@ int countPossible(const int field[N][N]) {
     return ALL_COUNT - 2 + (h5 ? 1 : possibleH(field, 4) - 1) +
            (v5 ? 1 : possibleV(field, 4) - 1);
   } else {
-    i = 0, j = -1;
-    for (auto &e : ALL_EXCEPT_DOT) {
-      j++;
-      if (j && hasPossibleMoves(e.figure, field)) {
+    i = 0;
+    // j=0 square3,j=ALL_COUNT-1 dot
+    for (j = 1; j < ALL_COUNT - 1; j++)
+      if (hasPossibleMoves(ALL_FIGURES[j], field))
         i++;
-      }
-    }
+
     return i + 1;
   }
 }
@@ -494,56 +555,24 @@ VInfo possibleMoves(const Figure &f, const VFigure &recent,
   int i, j, es, x, y, k, l, _x, _y, end, fi, possible;
   int fill[N][N], after[N][N];
   VInfo ea;
-  std::set<int> xa, ya;
-  for (j = 0; j <= N - f.size(); j++) {
-    for (i = 0; i <= N - f[0].size(); i++) {
+  for (j = 0; j <= N - f.height; j++) {
+    for (i = 0; i <= N - f.width; i++) {
       es = 0;
       copy(field, fill);
-      xa.clear();
-      ya.clear();
-      for (_y = 0; _y < f.size(); _y++) {
-        for (_x = 0; _x < f[_y].size(); _x++) {
-          if (f[_y][_x]) {
-            x = _x + i;
-            y = _y + j;
-            if (field[y][x]) {
-              goto l183;
-            }
-            xa.insert(x);
-            ya.insert(y);
-            es += (x == 0 ? 1 : field[y][x - 1]) +
-                  (x == N - 1 ? 1 : field[y][x + 1]) +
-                  (y == 0 ? 1 : field[y - 1][x]) +
-                  (y == N - 1 ? 1 : field[y + 1][x]);
-            fill[y][x] = 1;
-          }
+      for (auto &xy : f.xy) {
+        x = xy[0] + i;
+        y = xy[1] + j;
+        if (field[y][x]) {
+          goto l183;
         }
-      }
-      copy(fill, after);
-
-      l = 0;
-      for (auto &x : xa) {
-        for (y = 0; y < N && fill[y][x]; y++)
-          ;
-        if (y == N) {
-          for (y = 0; y < N; y++) {
-            after[y][x] = 0;
-          }
-          l++;
-        }
+        es += (x == 0 ? 1 : field[y][x - 1]) +
+              (x == N - 1 ? 1 : field[y][x + 1]) +
+              (y == 0 ? 1 : field[y - 1][x]) +
+              (y == N - 1 ? 1 : field[y + 1][x]);
+        fill[y][x] = 1;
       }
 
-      for (auto &y : ya) {
-        for (x = 0; x < N && fill[y][x]; x++)
-          ;
-        if (x == N) {
-          for (x = 0; x < N; x++) {
-            after[y][x] = 0;
-          }
-          l++;
-        }
-      }
-
+      l = resetAndGetLines(i, j, f, fill, after);
       fi = 0;
       end = recent.empty() ? 0 : 1;
       for (auto &e : recent) {
@@ -566,10 +595,10 @@ VInfo possibleMoves(const Figure &f, const int field[N][N]) {
 
 int index3(int i, int j) { return j + (i <= j); }
 
-Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
+Info estimate(const VInt &vf, const int field[N][N], const VInt &figureIndex,
               const int code, const int lines) {
   Info r, e;
-  VFigure v2;
+  VInt v2;
   int j, k;
   r.setInvalid();
   r.setPrizeInvalid();
@@ -585,7 +614,7 @@ Info estimate(const VFigure &vf, const int field[N][N], const VInt &figureIndex,
   }
 
   for (auto &i : vi) {
-    auto v = possibleMoves(vf[i], field);
+    auto v = possibleMoves(ALL_FIGURES[vf[i]], field);
 
     if (vf.size() == 1) {
       if (v.empty()) {
@@ -659,13 +688,13 @@ std::vector<VInt> permutations(int n) {
   return r;
 }
 
-bool same(const VFigure &v, const int field[N][N]) {
+bool same(const VInt &v, const int field[N][N]) {
   int j = 0;
   int t[N][N], a[N][N];
   for (auto &p : permutations(v.size())) {
     copy(field, t);
     for (auto &i : p) {
-      if (!make_move(best.gx(i), best.gy(i), v[best.n[i]], t)) {
+      if (!make_move(best.gx(i), best.gy(i), ALL_FIGURES[v[best.n[i]]], t)) {
         return false;
       }
     }
@@ -685,52 +714,47 @@ std::string fillString(int i) {
   return std::format("fill {}/{}={:.2f}%", i, N * N, i * 100. / N / N);
 }
 
-std::string join(const VString &vs) {
+std::string join(const VString &vs, char sep = '\n', bool after = 0) {
   std::string s;
+  bool f = 1;
   for (auto &a : vs) {
-    s += a + '\n';
+    if (f) {
+      f = 0;
+    } else {
+      s += sep;
+    }
+    s += a;
+  }
+  if (after) {
+    s += sep;
   }
   return s;
 }
 
-/* std::string uncode(int i) {
-  // (figureIndex[i] << 6) | (a.x << 3) | a.y; // 12bit
-  int y = i & 7;
-  i >>= 3;
-  int x = i & 7;
-  i >>= 3;
-  return std::format(
-      "x{} y{} {}\n", x, y,
-      i == ALL_COUNT - 1
-          ? "dot"
-          : (i >= ALL_COUNT ? std::to_string(i) : ALL_EXCEPT_DOT[i].string));
-}
- */
-
-void findBest() {
-  VFigure v;
-  std::string s;
-  for (auto &a : figures) {
-    if (!a.empty()) {
-      v.push_back(a);
+VInt getNonEmptyIndex() {
+  VInt vi;
+  for (auto &i : gfigureIndex) {
+    if (i != ALL_COUNT) {
+      vi.push_back(i);
     }
   }
+  return vi;
+}
 
-  figureIndex.clear();
+std::string nonEmptyFiguresString() {
+  VString vs;
+  for (auto a : getNonEmptyIndex()) {
+    vs.push_back(ALL_FIGURES[a].code);
+  }
+  return join(vs, SEPA);
+}
+
+void findBest() {
   set2.clear();
 #ifdef USE_SKIPC
   skipc2 = 0;
 #endif
-  for (auto &a : figures) {
-    s = to_string(a);
-    auto it = std::find_if(std::begin(ALL_EXCEPT_DOT), std::end(ALL_EXCEPT_DOT),
-                           [&s](auto &e) { return e.string == s; });
-
-    figureIndex.push_back(it == std::end(ALL_EXCEPT_DOT)
-                              ? ALL_COUNT - 1
-                              : std::distance(std::begin(ALL_EXCEPT_DOT), it));
-  }
-  best = estimate(v, field, figureIndex, 0, 0);
+  best = estimate(getNonEmptyIndex(), field, gfigureIndex, 0, 0);
 }
 
 VInfo getPrizesInfo() {
@@ -745,7 +769,7 @@ VInfo getPrizesInfo() {
         field[j][i] = 0;
       } else {
         copy(original, field);
-        make_move(i, j, DOT, field);
+        make_move(i, j, ALL_FIGURES[DOT_INDEX], field);
       }
 
       findBest();
@@ -778,17 +802,12 @@ std::string getPrizesString() {
 }
 
 std::string bestString() {
-  VFigure v;
   std::string s;
   auto start = std::chrono::steady_clock::now();
-  for (auto &a : figures) {
-    if (!a.empty()) {
-      v.push_back(a);
-    }
-  }
+  VInt v = getNonEmptyIndex();
 
   if (v.size() >= 1 && v.size() <= 3) {
-    s = to_string(field) + to_string(v);
+    s = to_string(field) + nonEmptyFiguresString();
     auto &prev = previous[v.size()];
     if (s == prev.code) {
       best = prev.best;
@@ -802,7 +821,7 @@ std::string bestString() {
       s = getPrizesString(); // also set best
     }
     if (best.isInvalid()) {
-      s = "always game over\n";//'\n' needs
+      s = "always game over\n"; //'\n' needs
     } else {
       if (v.size() == 1) {
         best.n[0] = 0;
@@ -832,34 +851,29 @@ std::string bestString() {
   }
 }
 
-Figure reverseX(const Figure &matrix) {
+VVInt reverseX(const VVInt &matrix) {
   return matrix | std::views::transform([](auto &row) {
            return row | std::views::reverse | std::ranges::to<VInt>();
          }) |
          std::ranges::to<std::vector>();
 }
 
-Figure reverseY(Figure &a) {
+VVInt reverseY(const VVInt &a) {
   return std::views::reverse(a) | std::ranges::to<std::vector>();
 }
 
-Figure invertFigure(const Figure &a, bool x, bool y) {
-  Figure b = x ? reverseX(a) : a;
+VVInt invertFigure(const VVInt &a, bool x, bool y) {
+  VVInt b = x ? reverseX(a) : a;
   if (y) {
     b = reverseY(b);
   }
   return b;
 }
 
-Figure rotate(const Figure &matrix) {
-  if (matrix.empty())
-    return {};
-
+VVInt rotate(const VVInt &matrix) {
   int rows = matrix.size();
   int cols = matrix[0].size();
-
-  Figure result(cols, VInt(rows));
-
+  VVInt result(cols, VInt(rows));
   for (int i = 0; i < rows; ++i) {
     for (int j = 0; j < cols; ++j) {
       result[j][rows - 1 - i] = matrix[i][j];
@@ -868,13 +882,27 @@ Figure rotate(const Figure &matrix) {
   return result;
 }
 
+void from_string(const std::string &s, VVInt &f) {
+  VInt v;
+  f.clear();
+  for (auto &a : s) {
+    if (strchr("01", a)) {
+      v.push_back(a - '0');
+    } else {
+      f.push_back(v);
+      v.clear();
+    }
+  }
+  f.push_back(v);
+}
+
 void init() {
   VString vs;
   int x, y, i, j;
   std::string s, key;
   std::set<std::string> set;
 
-  /*first square3 & lines5 for possible figures after, dot is ignored*/
+  /*first square3 & lines after, dot is last*/
 
   // square
   for (i = 3; i >= 2; i--) {
@@ -898,8 +926,11 @@ void init() {
     vs.push_back(key);
   }
 
+  // dot
+  vs.push_back("1");
+
   int k = 0;
-  Figure a;
+  VVInt a;
   for (const auto &key : vs) {
     from_string(key, a);
     set.clear();
@@ -907,11 +938,11 @@ void init() {
     for (x = 0; x < 2; x++) {
       for (y = 0; y < 2; y++) {
         for (i = 0; i < 2; i++) {
-          auto f = invertFigure(i ? r : a, x, y);
+          VVInt f = invertFigure(i ? r : a, x, y);
           s = to_string(f);
           if (!set.contains(s)) {
             set.insert(s);
-            ALL_EXCEPT_DOT[k++] = {f, s};
+            ALL_FIGURES[k++].set(s, key, f);
           }
         }
       }
@@ -919,10 +950,40 @@ void init() {
   }
 
   InvalidInfo.setInvalid();
+  EMPTY.setEmpty();
+  gfigureIndex.resize(3);
 
   // for gtk newGame() do it
 #ifndef GTKMM_MAJOR_VERSION
   gameBegin = std::chrono::steady_clock::now();
   best.setInvalid();
 #endif
+}
+
+std::string toString(int t, char separator = ' ', int digits = 3) {
+  // std::fixed to prevents scientific notation t=1234567.890123 b=1.23457e
+  // +06
+  std::stringstream c;
+  c << std::fixed << t;
+  std::string s, e, b = c.str();
+  std::string::size_type p, p1;
+  p = b.find('.');
+  if (p != std::string::npos) {
+    for (p1 = b.length() - 1; p1 > p && b[p1] == '0'; p1--)
+      ;            //"3.875000"->"3.875"
+    if (p != p1) { //"1.000" -> "1"
+      e = b.substr(p, p1 - p + 1);
+    }
+    b = b.substr(0, p);
+  }
+  bool negative = std::is_signed<int>::value && t < 0;
+  unsigned i = b.length() - 1;
+  for (char a : b) {
+    s += a;
+    if (i % digits == 0 && i != 0 && (!negative || i != b.length() - 1)) {
+      s += separator;
+    }
+    i--;
+  }
+  return s + e;
 }

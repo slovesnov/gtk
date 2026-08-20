@@ -331,9 +331,9 @@ struct Info {
 
   /*
   0 possibleAfter 1-39, 6bits
-  1 score(sam be summed) 1- 9+360=369 9bits
+  1 score(can be summed) 1- 9+360=369 9bits
   2 64-fieldC 0-64, 8bits
-  3 estimate(sam be summed) for figure with <=5 dots <=3*5, for square3(only
+  3 estimate(can be summed) for figure with <=5 dots <=3*5, for square3(only
   figure with >5 dots) 4corners*2+4*1=10 5bits,for 3 fugures suppose<=32
   */
   inline static const int BITS[] = {6, 9, 8, 5};

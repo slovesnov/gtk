@@ -1,7 +1,6 @@
 *.exe
 app.res
 /png
-log.txt
+log*.txt
 macro_gcc.txt
-log1.txt
 deploy.txt

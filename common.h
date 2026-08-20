@@ -285,6 +285,76 @@ int findFigureIndex(std::string code) {
   return std::distance(std::begin(ALL_FIGURES), it);
 }
 
+bool hasPossibleMoves(const Figure &f, const int field[N][N]) {
+  int x, y;
+  for (x = 0; x <= N - f.width; x++) {
+    for (y = 0; y <= N - f.height; y++) {
+      for (auto &xy : f.xy) {
+        if (field[xy[1] + y][xy[0] + x]) {
+          goto l99;
+        }
+      }
+      return true;
+    l99:;
+    }
+  }
+  return false;
+}
+
+bool possibleRectange(int i, int j, const int field[N][N], int w, int h) {
+  int x, y;
+  for (x = 0; x < w; x++) {
+    for (y = 0; y < h; y++) {
+      if (field[y + j][x + i])
+        return false;
+    }
+  }
+  return true;
+}
+
+bool possibleRectange(const int field[N][N], int w, int h) {
+  int x, y;
+  for (x = 0; x <= N - w; x++) {
+    for (y = 0; y <= N - h; y++) {
+      if (possibleRectange(x, y, field, w, h)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool possibleSquare3(const int field[N][N]) {
+  return possibleRectange(field, 3, 3);
+}
+
+bool possibleV(const int field[N][N], int n) {
+  return possibleRectange(field, 1, n);
+}
+
+bool possibleH(const int field[N][N], int n) {
+  return possibleRectange(field, n, 1);
+}
+
+int countPossible(const int field[N][N]) {
+  int i, j;
+  bool square3 = possibleSquare3(field), h5, v5;
+  if (square3) {
+    h5 = possibleV(field, 5);
+    v5 = possibleH(field, 5);
+    return ALL_COUNT - 2 + (h5 ? 1 : possibleH(field, 4) - 1) +
+           (v5 ? 1 : possibleV(field, 4) - 1);
+  } else {
+    i = 0;
+    // j=0 square3,j=ALL_COUNT-1 dot
+    for (j = 1; j < ALL_COUNT - 1; j++)
+      if (hasPossibleMoves(ALL_FIGURES[j], field))
+        i++;
+
+    return i + 1;
+  }
+}
+
 #define FIELDS_FIRST
 
 #ifdef FIELDS_FIRST
@@ -360,18 +430,20 @@ struct Info {
 
   Info() {}
   Info(int _x, int _y, int _estimate, std::pair<int, int> linesScore, bool _end,
-       int _possibleAfter, int _field[N][N]) {
+       int _field[N][N]) {
     x = _x;
     y = _y;
     end = _end;
     lines = linesScore.first;
     copy(_field, field);
     setPrizeInvalid();
+    int possibleAfter = countPossible(field);
+
     Params v = {
 #ifdef FIELDS_FIRST
-        _possibleAfter, N * N - countFill(field), linesScore.second, _estimate
+        possibleAfter, N * N - countFill(field), linesScore.second, _estimate
 #else
-        _possibleAfter, linesScore.second, N * N - countFill(field), _estimate
+        possibleAfter, linesScore.second, N * N - countFill(field), _estimate
 #endif
 
     };
@@ -459,11 +531,10 @@ struct Info {
   }
 
   std::string to_string() {
-    int pa = get(POSSIBLE_AFTER);
-    return std::format(
-        "{}{}{}{}{}{}{}", x, y, lines ? '[' + std::to_string(lines) + ']' : "",
-        end ? "e" : "", pa == InvalidValue ? "" : possibleString(pa, 0), ARROW,
-        get(ESTIMATE));
+    return std::format("{}{}{}{}{}{}{}", x, y,
+                       lines ? '[' + std::to_string(lines) + ']' : "",
+                       end ? "e" : "", possibleString(get(POSSIBLE_AFTER), 0),
+                       ARROW, get(ESTIMATE));
   }
 
   bool isInvalid() { return x == InvalidValue; }
@@ -631,79 +702,9 @@ std::string gameTimeString() {
   return std::format("time {:%T}{}\n", sec, startFromEmptyField ? "" : "*");
 }
 
-bool hasPossibleMoves(const Figure &f, const int field[N][N]) {
-  int x, y;
-  for (x = 0; x <= N - f.width; x++) {
-    for (y = 0; y <= N - f.height; y++) {
-      for (auto &xy : f.xy) {
-        if (field[xy[1] + y][xy[0] + x]) {
-          goto l99;
-        }
-      }
-      return true;
-    l99:;
-    }
-  }
-  return false;
-}
-
-bool possibleRectange(int i, int j, const int field[N][N], int w, int h) {
-  int x, y;
-  for (x = 0; x < w; x++) {
-    for (y = 0; y < h; y++) {
-      if (field[y + j][x + i])
-        return false;
-    }
-  }
-  return true;
-}
-
-bool possibleRectange(const int field[N][N], int w, int h) {
-  int x, y;
-  for (x = 0; x <= N - w; x++) {
-    for (y = 0; y <= N - h; y++) {
-      if (possibleRectange(x, y, field, w, h)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-bool possibleSquare3(const int field[N][N]) {
-  return possibleRectange(field, 3, 3);
-}
-
-bool possibleV(const int field[N][N], int n) {
-  return possibleRectange(field, 1, n);
-}
-
-bool possibleH(const int field[N][N], int n) {
-  return possibleRectange(field, n, 1);
-}
-
-int countPossible(const int field[N][N]) {
-  int i, j;
-  bool square3 = possibleSquare3(field), h5, v5;
-  if (square3) {
-    h5 = possibleV(field, 5);
-    v5 = possibleH(field, 5);
-    return ALL_COUNT - 2 + (h5 ? 1 : possibleH(field, 4) - 1) +
-           (v5 ? 1 : possibleV(field, 4) - 1);
-  } else {
-    i = 0;
-    // j=0 square3,j=ALL_COUNT-1 dot
-    for (j = 1; j < ALL_COUNT - 1; j++)
-      if (hasPossibleMoves(ALL_FIGURES[j], field))
-        i++;
-
-    return i + 1;
-  }
-}
-
 VInfo possibleMoves(const Figure &f, const VInt &recent, const int field[N][N],
                     bool fromEstimate = false) {
-  int i, j, e, x, y, possible, fill[N][N], after[N][N];
+  int i, j, e, x, y, fill[N][N], after[N][N];
   std::pair<int, int> p;
   bool end;
   VInfo vi;
@@ -741,9 +742,7 @@ VInfo possibleMoves(const Figure &f, const VInt &recent, const int field[N][N],
                     return hasPossibleMoves(ALL_FIGURES[e], after);
                   });
       }
-      possible =
-          !fromEstimate || recent.empty() ? countPossible(after) : InvalidValue;
-      vi.push_back(Info(i, j, e, p, end, possible, after));
+      vi.push_back(Info(i, j, e, p, end, after));
     l183:;
     }
   }

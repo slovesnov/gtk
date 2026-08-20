@@ -702,8 +702,8 @@ std::string gameTimeString() {
   return std::format("time {:%T}{}\n", sec, startFromEmptyField ? "" : "*");
 }
 
-VInfo possibleMoves(const Figure &f, const VInt &recent, const int field[N][N],
-                    bool fromEstimate = false) {
+VInfo possibleMoves(const Figure &f, const VInt &recent,
+                    const int field[N][N]) {
   int i, j, e, x, y, fill[N][N], after[N][N];
   std::pair<int, int> p;
   bool end;
@@ -734,23 +734,16 @@ VInfo possibleMoves(const Figure &f, const VInt &recent, const int field[N][N],
       }
 
       p = resetGetLinesScore(i, j, f, fill, after);
-      if (!fromEstimate) {
-        end =
-            recent.empty()
+      end = recent.empty()
                 ? false
                 : !std::any_of(recent.begin(), recent.end(), [&after](auto &e) {
                     return hasPossibleMoves(ALL_FIGURES[e], after);
                   });
-      }
       vi.push_back(Info(i, j, e, p, end, after));
     l183:;
     }
   }
   return vi;
-}
-
-VInfo possibleMoves(const Figure &f, const int field[N][N]) {
-  return possibleMoves(f, {}, field, true);
 }
 
 int index3(int i, int j) { return j + (i <= j); }
@@ -775,7 +768,7 @@ Info estimate(const VInt &vf, const int field[N][N], const VInt &figureIndex,
   }
 
   for (auto &i : vi) {
-    auto v = possibleMoves(ALL_FIGURES[vf[i]], field);
+    auto v = possibleMoves(ALL_FIGURES[vf[i]],{}, field);
 
     if (vf.size() == 1) {
       return v.empty() ? InvalidInfo : *std::min_element(v.begin(), v.end());

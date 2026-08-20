@@ -158,12 +158,12 @@ public:
     set_default_size(250, 450);
 
     Gtk::Label *label = Gtk::make_managed<Gtk::Label>();
-    for (i = 39; i > 0; i--) {
+    for (i = ALL_COUNT; i > 0; i--) {
       if (i) {
         s += "\n";
       }
       s += std::format("{} {}", i, fd(i));
-      if (i == 0) {
+      if (i == ALL_COUNT) {
         s += std::format(" start {}", START_HIGHLIGHT_N);
       }
     }
@@ -180,7 +180,7 @@ public:
     m_scrolled_window->set_min_content_height(100);
     m_scrolled_window->set_child(*label);
 
-    m_adjustment = Gtk::Adjustment::create(highlight_n, 1, 39, 1, 10, 0);
+    m_adjustment = Gtk::Adjustment::create(highlight_n, 1, ALL_COUNT, 1, 10, 0);
     m_spin_button.set_adjustment(m_adjustment);
     m_spin_button.set_numeric(true);
 
@@ -317,15 +317,8 @@ public:
     });
 
     m_buttonOptions.signal_clicked().connect([this]() {
-      bool b = timer;
-      if (b) {
-        timer = 0;
-      }
       auto dialog = Gtk::make_managed<OptionsDialog>(*this);
       dialog->set_visible(true);
-      if (b) {
-        timer = 1;
-      }
     });
 
     setButtonTimerText();

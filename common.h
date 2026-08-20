@@ -15,20 +15,21 @@
 #include <unordered_map>
 #endif
 
-const int NF = -1;
+const int NF = 0;
 const bool DEBUG_MODE = NF != -1;
 
 // allow any number of moves 0-3
 const std::string fixed_field[] = {
-    R"(00000011
-11111010
-11101001
-11111010
-11110010
+    R"(00000000
+00111100
 00000000
-01101011
-11101011
-001 111-111 010-111 111 111)",
+01111100
+00000000
+00000010
+11000010
+11000010
+1-11 01 11-11
+)",
 
     R"(11101101
 00000110
@@ -75,8 +76,18 @@ const std::string ARROW = "=";
 const std::string ALWAYS_GAME_OVER = "always game over";
 
 const std::unordered_map<std::string, std::string> MAP = {
-    {"01 11 10", "z"}, {"01 11 01", "t"},   {"001 111", "l"},
-    {"101 111", "π"},  {"01 11", "corner"}, {"001 001 111", "CORNER"}};
+    {"01 11 10", "z"},
+    {"01 11 01", "t"},
+    {"001 111", "l"},
+    {"101 111",
+#ifdef GTKMM_MAJOR_VERSION
+     "π"
+#else
+     "n"
+#endif
+    },
+    {"01 11", "corner"},
+    {"001 001 111", "CORNER"}};
 
 std::chrono::steady_clock::time_point gameBegin;
 bool startFromEmptyField = 0;
@@ -171,6 +182,8 @@ struct Figure {
     }
   }
 
+  int squares() const { return xy.size(); }
+
   std::string to_string() {
     std::string s;
     s = "xfill";
@@ -185,12 +198,48 @@ struct Figure {
     for (auto &i : xy) {
       s += std::format(" {}{}", i[0], i[1]);
     }
-    return std::format("{} {} {}x{} {}", name, code, width, height, s);
+    return std::format("{} {} {}x{} sq{} {}", name, code, width, height,
+                       squares(), s);
     // return std::format("code{} mincode{} size{}{} {}", code, mincode,
     // width,
     //                    height, s);
   }
 } ALL_FIGURES[ALL_COUNT];
+
+std::string join(const VString &vs, char sep = '\n', bool after = 0) {
+  std::string s;
+  bool f = 1;
+  for (auto &a : vs) {
+    if (f) {
+      f = 0;
+    } else {
+      s += sep;
+    }
+    s += a;
+  }
+  if (after) {
+    s += sep;
+  }
+  return s;
+}
+
+VInt getNonEmptyIndex() {
+  VInt vi;
+  for (auto &i : gfigureIndex) {
+    if (i != ALL_COUNT) {
+      vi.push_back(i);
+    }
+  }
+  return vi;
+}
+
+std::string nonEmptyFiguresString() {
+  VString vs;
+  for (auto a : getNonEmptyIndex()) {
+    vs.push_back(ALL_FIGURES[a].code);
+  }
+  return join(vs, '-');
+}
 
 int findFigureIndex(std::string code) {
   auto it = std::find_if(std::begin(ALL_FIGURES), std::end(ALL_FIGURES),
@@ -199,7 +248,7 @@ int findFigureIndex(std::string code) {
 }
 
 struct Info {
-  int x, y, x1, y1, x2, y2, lines, field[N][N], n[3], nlines[3], prize_x,
+  int x, y, x1, y1, x2, y2, lines, score, field[N][N], n[3], nlines[3], prize_x,
       prize_y;
   uint32_t fullestimate;
   bool end, prize_add;
@@ -212,6 +261,7 @@ struct Info {
     x2 = e.x2;
     y2 = e.y2;
     lines = e.lines;
+    score = e.score;
     end = e.end;
     copy(e.field, field);
     std::copy(e.n, e.n + 3, n);
@@ -223,11 +273,11 @@ struct Info {
   }
 
   Info() {}
-  Info(int _x, int _y, int _estimate, int _lines, bool _end, int _possibleAfter,
-       int _field[N][N]) {
+  Info(int _x, int _y, int _estimate, std::pair<int, int> linesScore, bool _end,
+       int _possibleAfter, int _field[N][N]) {
     x = _x;
     y = _y;
-    lines = _lines;
+    std::tie(lines, score) = linesScore;
     end = _end;
     copy(_field, field);
     setPrizeInvalid();
@@ -255,9 +305,10 @@ struct Info {
     nlines[index] = e.nlines[index];
   }
 
-  std::string movesString(int size) {
+  std::string movesString() {
     std::string s;
     int i;
+    int size = getNonEmptyIndex().size();
     for (i = 0; i < size; i++) {
       s += std::format(
           "{}{}{} {}\n",
@@ -336,9 +387,9 @@ void print_line_helper(std::source_location loc, Args &&...args) {
 #define pr1 PRINT
 #define pri PRINT_LINE1("")
 
-int resetAndGetLines(int i, int j, const Figure &f, int fill[N][N],
-                     int after[N][N]) {
-  int l = 0, x, y;
+std::pair<int, int> resetGetLinesScore(int i, int j, const Figure &f,
+                                       int fill[N][N], int after[N][N]) {
+  int l = 0, x, y, score = 0;
   copy(fill, after);
 
   for (auto &_x : f.xfill) {
@@ -364,24 +415,7 @@ int resetAndGetLines(int i, int j, const Figure &f, int fill[N][N],
       l++;
     }
   }
-  return l;
-}
-
-std::string join(const VString &vs, char sep = '\n', bool after = 0) {
-  std::string s;
-  bool f = 1;
-  for (auto &a : vs) {
-    if (f) {
-      f = 0;
-    } else {
-      s += sep;
-    }
-    s += a;
-  }
-  if (after) {
-    s += sep;
-  }
-  return s;
+  return {l, f.squares() + l * l * 10};
 }
 
 std::string to_string(const int field[N][N]) {
@@ -423,7 +457,7 @@ bool make_move(int i, int j, const Figure &f, int field[N][N]) {
     fill[y][x] = 1;
   }
   copy(fill, after);
-  resetAndGetLines(i, j, f, fill, after);
+  resetGetLinesScore(i, j, f, fill, after);
   copy(after, field);
   return true;
 }
@@ -567,7 +601,8 @@ int countPossible(const int field[N][N]) {
 
 VInfo possibleMoves(const Figure &f, const VInt &recent, const int field[N][N],
                     bool fromEstimate = false) {
-  int i, j, e, x, y, l, possible, fill[N][N], after[N][N];
+  int i, j, e, x, y, possible, fill[N][N], after[N][N];
+  std::pair<int,int>p;
   bool end;
   VInfo vi;
   for (j = 0; j <= N - f.height; j++) {
@@ -595,7 +630,7 @@ VInfo possibleMoves(const Figure &f, const VInt &recent, const int field[N][N],
         fill[y][x] = 1;
       }
 
-      l = resetAndGetLines(i, j, f, fill, after);
+      p = resetGetLinesScore(i, j, f, fill, after);
       if (!fromEstimate) {
         end =
             recent.empty()
@@ -606,7 +641,7 @@ VInfo possibleMoves(const Figure &f, const VInt &recent, const int field[N][N],
       }
       possible =
           !fromEstimate || recent.empty() ? countPossible(after) : InvalidValue;
-      vi.push_back(Info(i, j, e, l, end, possible, after));
+      vi.push_back(Info(i, j, e, p, end, possible, after));
     l183:;
     }
   }
@@ -729,24 +764,6 @@ bool same(const VInt &v, const int field[N][N]) {
 
 std::string fillString(int i) {
   return std::format("fill {}/{}={:.2f}%", i, N * N, i * 100. / N / N);
-}
-
-VInt getNonEmptyIndex() {
-  VInt vi;
-  for (auto &i : gfigureIndex) {
-    if (i != ALL_COUNT) {
-      vi.push_back(i);
-    }
-  }
-  return vi;
-}
-
-std::string nonEmptyFiguresString() {
-  VString vs;
-  for (auto a : getNonEmptyIndex()) {
-    vs.push_back(ALL_FIGURES[a].code);
-  }
-  return join(vs, '-');
 }
 
 void findBest() {

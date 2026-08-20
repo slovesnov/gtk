@@ -9,9 +9,9 @@ int main() {
   int i;
   init();
 
-  // for (auto &a : ALL_FIGURES) {
-  //   pr(a.to_string());
-  // }
+  for (auto &a : ALL_FIGURES) {
+    pr(a.to_string());
+  }
 
   parseInitialString();
   for (auto a : gfigureIndex) {
@@ -19,4 +19,6 @@ int main() {
   }
   pr(to_string(field));
    pr(bestString());
+  if(!best.isInvalid())
+    pr(best.movesString())
 }

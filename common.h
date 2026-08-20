@@ -768,10 +768,14 @@ Info estimate(const VInt &vf, const int field[N][N], const VInt &figureIndex,
   }
 
   for (auto &i : vi) {
-    auto v = possibleMoves(ALL_FIGURES[vf[i]],{}, field);
+    auto v = possibleMoves(ALL_FIGURES[vf[i]], {}, field);
 
     if (vf.size() == 1) {
-      return v.empty() ? InvalidInfo : *std::min_element(v.begin(), v.end());
+      if (v.empty())
+        return InvalidInfo;
+      r = *std::min_element(v.begin(), v.end());
+      r.setLines(0);
+      return r;
     }
 
     v2 = vf;

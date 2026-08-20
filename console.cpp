@@ -1,4 +1,4 @@
-#include "common.h"
+  #include "common.h"
 
 /*
 clear && g++ -std=c++23 console.cpp -o console.exe && ./console.exe

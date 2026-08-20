@@ -16,18 +16,23 @@
 #include <gtkmm/window.h>
 #include <gtkmm/spinbutton.h>
 #include <gtkmm/label.h>
+#include <gtkmm/checkbutton.h>
 #include <windows.h>
 #include "common.h"
 
 bool timer = 1;
-int saveText = 0;
 const bool LOG = 1;
-const int TIMER_MILLISECONDS = 500;
+const int TIMER_MILLISECONDS = 1000;//500
 const int SAVE_TIMER_MILLISECONDS = 3000;
 const std::string LOG_FILE = "log.txt";
 const std::string SCREEN_DIR = "png";
 const int START_HIGHLIGHT_N = 33;
 int highlight_n = START_HIGHLIGHT_N;
+
+const int POSSIBLE = 0;
+const int FILL = 1;
+const int FIGURE = 2;
+bool show_statistics[] = {1, 0, 0};
 
 const int DX = 763 - 852;
 const int DY = 347 - 202;
@@ -59,7 +64,6 @@ uint32_t BG_COLOR = 0xE6D8AD;
 uint32_t figure_color[] = {0xff59ed9e, 0xffffb945, 0xff45dcf7};
 
 const std::string SAVE_PNG = "save png";
-const std::string SAVE_TEXT = "add text to log";
 int gtotalWidth;
 uint32_t *gp;
 std::vector<uint8_t> gbuffer;
@@ -155,7 +159,7 @@ public:
     set_transient_for(parent);
     this->parent = &parent;
     set_modal(true);
-    set_default_size(250, 450);
+    set_default_size(350, 450);
 
     Gtk::Label *label = Gtk::make_managed<Gtk::Label>();
     for (i = ALL_COUNT; i > 0; i--) {
@@ -163,9 +167,9 @@ public:
         s += "\n";
       }
       s += std::format("{} {}", i, fd(i));
-      if (i == ALL_COUNT) {
-        s += std::format(" start {}", START_HIGHLIGHT_N);
-      }
+      // if (i == ALL_COUNT) {
+      //   s += std::format(" start {}", START_HIGHLIGHT_N);
+      // }
     }
     label->set_text(s);
     label->set_wrap(true);
@@ -176,8 +180,8 @@ public:
 
     m_scrolled_window->set_policy(Gtk::PolicyType::NEVER,
                                   Gtk::PolicyType::AUTOMATIC);
+    m_scrolled_window->set_hexpand(true);
     m_scrolled_window->set_propagate_natural_height(true);
-    m_scrolled_window->set_min_content_height(100);
     m_scrolled_window->set_child(*label);
 
     m_adjustment = Gtk::Adjustment::create(highlight_n, 1, ALL_COUNT, 1, 10, 0);
@@ -200,16 +204,30 @@ public:
     box->append(m_label);
 
     m_vbox.append(*box);
+    const std::string v[] = {"possible", "fill","figure" };
+    i = 0;
+    for (auto &a : m_check) {
+      a.set_label(v[i] + " statistics");
+      a.set_active(show_statistics[i]);
+      m_vbox.append(a);
+      i++;
+    }
     m_vbox.append(m_hbox_buttons);
-    m_vbox.append(*m_scrolled_window);
 
-    set_child(m_vbox);
+    box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 2);
+    box->append(m_vbox);
+    box->append(*m_scrolled_window);
+
+    set_child(*box);
     update_label();
 
     m_btn_cancel.signal_clicked().connect([this]() { close(); });
 
     m_btn_ok.signal_clicked().connect([this]() {
       highlight_n = m_spin_button.get_value();
+      for (int i = 0; i < checks; i++) {
+        show_statistics[i] = m_check[i].get_active();
+      }
       close();
     });
 
@@ -234,8 +252,10 @@ public:
   }
 
 private:
+  static const int checks = std::size(show_statistics);
   Gtk::Box m_vbox{Gtk::Orientation::VERTICAL};
   Gtk::Box m_hbox_buttons{Gtk::Orientation::HORIZONTAL};
+  Gtk::CheckButton m_check[checks];
 
   Gtk::SpinButton m_spin_button;
   Glib::RefPtr<Gtk::Adjustment> m_adjustment;
@@ -249,9 +269,9 @@ private:
 class Window : public TMWindow {
 public:
   Window()
-      : TMWindow("blocks timer"), m_buttonSave(SAVE_PNG),
-        m_buttonClearLog("clear log"), m_buttonSaveText(SAVE_TEXT),
-        m_buttonTimer(), m_buttonOptions("options") {
+      : TMWindow("blocks game"), m_buttonSave(SAVE_PNG),
+        m_buttonClearLog("clear log"), m_buttonTimer(),
+        m_buttonOptions("options") {
     int i;
 
     set_resizable(false);
@@ -282,7 +302,6 @@ public:
     auto box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
     box->append(m_buttonSave);
     box->append(m_buttonClearLog);
-    box->append(m_buttonSaveText);
     box->append(m_buttonTimer);
     box->append(m_buttonOptions);
     box->append(m_text_view[2]);
@@ -305,11 +324,6 @@ public:
 
     m_buttonClearLog.signal_clicked().connect(
         [this]() { std::filesystem::remove(fullPath(LOG_FILE)); });
-
-    m_buttonSaveText.signal_clicked().connect([this]() {
-      saveText = 1;
-      m_buttonSaveText.set_label("waiting...");
-    });
 
     m_buttonTimer.signal_clicked().connect([this]() {
       timer = !timer;
@@ -559,13 +573,6 @@ public:
     bool b;
     if (timer) {
       gets();
-      if (!DEBUG_MODE) {
-        if (saveText) {
-          addLog();
-          saveText = 0;
-          m_buttonSaveText.set_label(SAVE_TEXT);
-        }
-      }
       for (i = 0; i < NT; i++) {
         m_text_view[i].get_buffer()->set_text(m_out[i]);
       }
@@ -601,10 +608,10 @@ public:
     if (DEBUG_MODE) {
       parseInitialString();
     } else {
-      s = get_screenshot_winapi();
-      if (!s.empty()) {
+      se = get_screenshot_winapi();
+      if (!se.empty()) {
         best.setInvalid();
-        m_out[0] = s;
+        m_out[0] = se;
         return;
       }
     }
@@ -624,9 +631,9 @@ public:
 
       auto v = possibleMoves(a, recent, field);
       std::sort(v.begin(), v.end());
-      s += a.name + "\n";
+      se += a.name + "\n";
       for (auto &e : v) {
-        s += e.to_string() + "\n";
+        se += e.to_string() + "\n";
       }
     }
     int possible = countPossible(field);
@@ -679,20 +686,22 @@ public:
       }
     }
 
-    se = s;
-    s = "";
+    if (show_statistics[FIGURE]) {
+      std::sort(m_figureStatistics.begin(), m_figureStatistics.end());
 
-    std::sort(m_figureStatistics.begin(), m_figureStatistics.end());
+      for (const auto &e : m_figureStatistics)
+        s += e.to_string(total, max);
 
-    for (const auto &e : m_figureStatistics)
-      s += e.to_string(total, max);
+      VString vs = {
+          std::format("figures {}", total),
+          std::format("squares {}", toString(squares, ',')),
+      };
+      s += join(vs, '\n', 1);
+    }
+    s += (show_statistics[POSSIBLE] ? possibleStatString() : "") +
+         (show_statistics[FILL] ? fillStatString() : "")
 
-    VString vs = {
-        std::format("figures {}", total),
-        std::format("squares {}", toString(squares, ',')),
-    };
-
-    s += join(vs, '\n', 1) + possibleStatString() + fillStatString() + se;
+         + se;
     m_out[0] = s;
     m_out[1] = bestString();
     m_out[2] = std::format(
@@ -711,8 +720,7 @@ public:
   Gtk::ScrolledWindow m_scrolled_window[NT];
   Gtk::TextView m_text_view[NT];
   std::string m_out[NT];
-  Gtk::Button m_buttonSave, m_buttonSaveText, m_buttonTimer, m_buttonOptions,
-      m_buttonClearLog;
+  Gtk::Button m_buttonSave, m_buttonTimer, m_buttonOptions, m_buttonClearLog;
   Gtk::DrawingArea m_drawing_area;
   std::string m_prev, m_prevfields;
   std::vector<FigureStatistics> m_figureStatistics;

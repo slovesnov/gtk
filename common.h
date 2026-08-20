@@ -285,24 +285,9 @@ int findFigureIndex(std::string code) {
   return std::distance(std::begin(ALL_FIGURES), it);
 }
 
-template <size_t N>
-constexpr std::array<int, N> calculate_suffix_sums(const int (&bits)[N]) {
-  std::array<int, N> result{};
-  for (size_t i = 1; i < N; ++i) {
-    int sum = 0;
-    for (size_t j = i; j < N; ++j) {
-      sum += bits[j];
-    }
-    result[i - 1] = sum;
-  }
-  result[N - 1] = 0;
-
-  return result;
-}
-
 const int POSSIBLE_AFTER = 0;
-const int SCORE = 1;
-const int FIELDS = 2;
+const int FIELDS = 1;
+const int SCORE = 2;
 const int ESTIMATE = 3;
 
 struct Info {
@@ -329,16 +314,45 @@ struct Info {
     fullestimate = e.fullestimate;
   }
 
-  /*
-  0 possibleAfter 1-39, 6bits
-  1 score(can be summed) 1- 9+360=369 9bits
-  2 64-fieldC 0-64, 8bits
-  3 estimate(can be summed) for figure with <=5 dots <=3*5, for square3(only
-  figure with >5 dots) 4corners*2+4*1=10 5bits,for 3 fugures suppose<=32
+  /*Note on change order need change constants POSSIBLE_AFTER,
+  FIELDS, SCORE, ESTIMATE and Params v = {_possibleAfter, N * N - countFill(field), linesScore.second,  _estimate};
+  - possibleAfter 1-39, 6bits
+  - 64-fieldC 0-64, 8bits
+  - score (can be summed) 1- 9+360=369 9bits
+  - estimate (can be summed) for figure with <=5 dots <=3*5, for square3 (only
+  figure with >5 dots) 4corners*2+4*1=10 5bits, for 3 figures suppose<=32
   */
-  inline static const int BITS[] = {6, 9, 8, 5};
-  inline static const std::array<int, std::size(BITS)> SBITS =
-      calculate_suffix_sums(BITS);
+  static const int TOTAL_PARAMS = 4;
+  static const int POSSIBLE_AFTER_BITS = 6;
+  static const int FIELDS_BITS = 8;
+  static const int SCORE_BITS = 9;
+  static const int ESTIMATE_BITS = 5;
+
+  using Params = std::array<int, TOTAL_PARAMS>;
+  inline static constexpr Params BITS = []() {
+    Params arr{};
+#define A(p) arr[p] = p##_BITS;
+    A(POSSIBLE_AFTER)
+    A(FIELDS)
+    A(SCORE)
+    A(ESTIMATE)
+#undef A
+    return arr;
+  }();
+
+  inline static constexpr Params SBITS = []() {
+    Params arr{};
+    for (size_t i = 1; i < TOTAL_PARAMS; ++i) {
+      int sum = 0;
+      for (size_t j = i; j < TOTAL_PARAMS; ++j) {
+        sum += BITS[j];
+      }
+      arr[i - 1] = sum;
+    }
+    arr[TOTAL_PARAMS - 1] = 0;
+
+    return arr;
+  }();
 
   Info() {}
   Info(int _x, int _y, int _estimate, std::pair<int, int> linesScore, bool _end,
@@ -349,12 +363,12 @@ struct Info {
     lines = linesScore.first;
     copy(_field, field);
     setPrizeInvalid();
-    std::array<int, std::size(BITS)> v = {_possibleAfter, linesScore.second,
-                                          N * N - countFill(field), _estimate};
+    Params v = {_possibleAfter, N * N - countFill(field), linesScore.second,
+                _estimate};
     fullestimate = countEstimate(v);
   }
 
-  static uint32_t countEstimate(std::array<int, std::size(BITS)> v) {
+  static uint32_t countEstimate(Params v) {
     int i, e = 0;
     for (i = 0; i < std::size(BITS); i++) {
       e |= v[i] << SBITS[i];
@@ -362,23 +376,27 @@ struct Info {
     return e;
   }
 
-  std::array<int, std::size(BITS)> get() const {
-    std::array<int, std::size(BITS)> v;
+  Params get() const {
+    Params v;
     auto e = fullestimate;
     for (int i = 3; i >= 0; i--) {
-      v[i] = e & ((1 << Info::BITS[i]) - 1);
-      e >>= Info::BITS[i];
+      v[i] = e & ((1 << BITS[i]) - 1);
+      e >>= BITS[i];
     }
     return v;
   }
 
   int get(int i) const {
-    return (fullestimate >> SBITS[i]) & ((1 << BITS[i]) - 1);
+    int j = (fullestimate >> SBITS[i]) & ((1 << BITS[i]) - 1);
+    if (i == FIELDS) {
+      j = N * N - j;
+    }
+    return j;
   }
 
-  uint32_t addFullEstimate(const Info &a) const {
+  uint32_t addFullEstimate(const Info &p) const {
     auto t = get();
-    auto m = a.get();
+    auto m = p.get();
     for (auto a : {SCORE, ESTIMATE}) {
       if (t[a] + m[a] >= 1 << BITS[a]) {
         pr1("error {} {} {} {}", a, t[a], m[a], 1 << BITS[a]);

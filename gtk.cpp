@@ -571,7 +571,7 @@ public:
       }
       if (!best.isInvalid()) {
         if (best.isPrizeInvalid()) {
-          i = best.getPossibleAfter() <= highlight_n ? 0 : -1;
+          i = best.get(POSSIBLE_AFTER) <= highlight_n ? 0 : -1;
         } else {
           i = 1;
         }
@@ -698,7 +698,7 @@ public:
     m_out[2] = std::format(
         "{}now {}",
         best.isInvalid() ? ""
-                         : possibleString(best.getPossibleAfter(), 2) + ' ',
+                         : possibleString(best.get(POSSIBLE_AFTER), 2) + ' ',
         possibleString(possible, 2));
 
     if (!DEBUG_MODE && LOG && log) {

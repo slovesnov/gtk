@@ -15,7 +15,7 @@
 #include <unordered_map>
 #endif
 
-const int NF = 0;
+const int NF = -1;
 const bool DEBUG_MODE = NF != -1;
 
 // allow any number of moves 0-3
@@ -68,7 +68,7 @@ const int ADD_INDEX = 1;
 const int InvalidValue = -1;
 const int ALL_COUNT = 39;
 const int DOT_INDEX = ALL_COUNT - 1;
-#ifdef GTKMM_MAJOR_VERSION
+#ifdef GTK_MAJOR_VERSION
 const std::string ARROW = "→";
 #else
 const std::string ARROW = "=";
@@ -80,7 +80,7 @@ const std::unordered_map<std::string, std::string> MAP = {
     {"01 11 01", "t"},
     {"001 111", "l"},
     {"101 111",
-#ifdef GTKMM_MAJOR_VERSION
+#ifdef GTK_MAJOR_VERSION
      "π"
 #else
      "n"
@@ -98,6 +98,39 @@ std::string hs;
 #ifdef USE_SKIPC
 int skipc2;
 #endif
+
+#define PRINT(fmt, ...)                                                        \
+  std::cout << std::format(fmt " {}:{}\n" __VA_OPT__(, )                       \
+                               __VA_ARGS__ __VA_OPT__(, )                      \
+                                   std::source_location::current()             \
+                                       .file_name(),                           \
+                           std::source_location::current().line());
+
+template <typename... Args>
+void print_line_helper(std::source_location loc, Args &&...args) {
+  bool first = true;
+
+  auto print_with_space = [&](auto &&arg) {
+    if (!first) {
+      std::cout << " ";
+    }
+    first = false;
+    std::cout << std::forward<decltype(arg)>(arg);
+  };
+
+  (print_with_space(std::forward<Args>(args)), ...);
+
+  std::cout << " " << loc.file_name() << ":" << loc.line() << "\n";
+}
+
+#define PRINT_LINE1(...)                                                       \
+  print_line_helper(std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);
+
+// pr("123");
+#define pr PRINT_LINE1
+// pr1("error {} {}", v[i], v[i + 1]);
+#define pr1 PRINT
+#define pri PRINT_LINE1("")
 
 bool same(int f1[N][N], int f2[N][N]) {
   return std::equal(&f1[0][0], &f1[0][0] + N * N, &f2[0][0]);
@@ -131,6 +164,11 @@ std::string possibleString(int i, const int o) {
   else
     return std::format("{} {:.1f}%", i, d);
 }
+
+struct MakeMoveResult {
+  bool valid;
+  int score;
+};
 
 struct Figure {
   std::vector<std::array<int, 2>> xy; // position of filled squares
@@ -262,14 +300,10 @@ constexpr std::array<int, N> calculate_suffix_sums(const int (&bits)[N]) {
   return result;
 }
 
-enum{
-
-}
-
-const int POSSIBLE_AFTER=0;
-const int SCORE=1;
-const int FIELDC=2;
-const int ESTIMATE=3;
+const int POSSIBLE_AFTER = 0;
+const int SCORE = 1;
+const int FIELDS = 2;
+const int ESTIMATE = 3;
 
 struct Info {
   int x, y, x1, y1, x2, y2, lines, field[N][N], n[3], nlines[3], prize_x,
@@ -296,16 +330,15 @@ struct Info {
   }
 
   /*
-  possibleAfter 1-39, 6bits
-  score(sam be summed) 1- 9+360=369 9bits
-  64-fieldC 0-64, 8bits
-  estimate(sam be summed) for figure with <=5 dots <=3*5, for square3(only
-  figure with >5 dots) 4sorners*2+4*1=10 4bits
+  0 possibleAfter 1-39, 6bits
+  1 score(sam be summed) 1- 9+360=369 9bits
+  2 64-fieldC 0-64, 8bits
+  3 estimate(sam be summed) for figure with <=5 dots <=3*5, for square3(only
+  figure with >5 dots) 4corners*2+4*1=10 5bits,for 3 fugures suppose<=32
   */
-  inline static const int BITS[] = {6, 9, 8, 4};
+  inline static const int BITS[] = {6, 9, 8, 5};
   inline static const std::array<int, std::size(BITS)> SBITS =
       calculate_suffix_sums(BITS);
-
 
   Info() {}
   Info(int _x, int _y, int _estimate, std::pair<int, int> linesScore, bool _end,
@@ -316,20 +349,44 @@ struct Info {
     lines = linesScore.first;
     copy(_field, field);
     setPrizeInvalid();
-    int v[] = {_possibleAfter, linesScore.second, N * N - countFill(field),
-               _estimate};
-    int i;
-    fullestimate = 0;
-    for (i = 0; i < std::size(v); i++) {
-      fullestimate |= v[i] << SBITS[i];
+    std::array<int, std::size(BITS)> v = {_possibleAfter, linesScore.second,
+                                          N * N - countFill(field), _estimate};
+    fullestimate = countEstimate(v);
+  }
+
+  static uint32_t countEstimate(std::array<int, std::size(BITS)> v) {
+    int i, e = 0;
+    for (i = 0; i < std::size(BITS); i++) {
+      e |= v[i] << SBITS[i];
     }
+    return e;
   }
 
-  int get(int i)const{
-      return (fullestimate >> SBITS[i]) & ((1 << BITS[i]) - 1);
+  std::array<int, std::size(BITS)> get() const {
+    std::array<int, std::size(BITS)> v;
+    auto e = fullestimate;
+    for (int i = 3; i >= 0; i--) {
+      v[i] = e & ((1 << Info::BITS[i]) - 1);
+      e >>= Info::BITS[i];
+    }
+    return v;
   }
 
-  int addFullEstimate(const Info &a) { return fullestimate + a.getEstimate(); }
+  int get(int i) const {
+    return (fullestimate >> SBITS[i]) & ((1 << BITS[i]) - 1);
+  }
+
+  uint32_t addFullEstimate(const Info &a) const {
+    auto t = get();
+    auto m = a.get();
+    for (auto a : {SCORE, ESTIMATE}) {
+      if (t[a] + m[a] >= 1 << BITS[a]) {
+        pr1("error {} {} {} {}", a, t[a], m[a], 1 << BITS[a]);
+      }
+      t[a] += m[a];
+    }
+    return countEstimate(t);
+  }
 
   void setLines(int i) { nlines[i] = lines; }
 
@@ -358,18 +415,27 @@ struct Info {
     return s;
   }
 
+  int totalLines() const {
+    int size = getNonEmptyIndex().size();
+    int i, j = 0;
+    for (i = 0; i < size; i++) {
+      j += nlines[i];
+    }
+    return j;
+  }
+
   std::string prizeString() {
     return std::format("{}{}{}{}{} {} {}", prize_add ? '+' : '-', prize_x,
-                       prize_y, ARROW, getPossibleAfter(), getFieldc(),
-                       getEstimate());
+                       prize_y, ARROW, get(POSSIBLE_AFTER), get(FIELDS),
+                       get(ESTIMATE));
   }
 
   std::string to_string() {
-    int pa = getPossibleAfter();
+    int pa = get(POSSIBLE_AFTER);
     return std::format(
         "{}{}{}{}{}{}{}", x, y, lines ? '[' + std::to_string(lines) + ']' : "",
         end ? "e" : "", pa == InvalidValue ? "" : possibleString(pa, 0), ARROW,
-        getEstimate());
+        get(ESTIMATE));
   }
 
   bool isInvalid() { return x == InvalidValue; }
@@ -393,39 +459,6 @@ struct Prev {
   std::string code, out[NT];
   Info best;
 } previous[4];
-
-#define PRINT(fmt, ...)                                                        \
-  std::cout << std::format(fmt " {}:{}\n" __VA_OPT__(, )                       \
-                               __VA_ARGS__ __VA_OPT__(, )                      \
-                                   std::source_location::current()             \
-                                       .file_name(),                           \
-                           std::source_location::current().line());
-
-template <typename... Args>
-void print_line_helper(std::source_location loc, Args &&...args) {
-  bool first = true;
-
-  auto print_with_space = [&](auto &&arg) {
-    if (!first) {
-      std::cout << " ";
-    }
-    first = false;
-    std::cout << std::forward<decltype(arg)>(arg);
-  };
-
-  (print_with_space(std::forward<Args>(args)), ...);
-
-  std::cout << " " << loc.file_name() << ":" << loc.line() << "\n";
-}
-
-#define PRINT_LINE1(...)                                                       \
-  print_line_helper(std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);
-
-// pr("123");
-#define pr PRINT_LINE1
-// pr1("error {} {}", v[i], v[i + 1]);
-#define pr1 PRINT
-#define pri PRINT_LINE1("")
 
 std::pair<int, int> resetGetLinesScore(int i, int j, const Figure &f,
                                        int fill[N][N], int after[N][N]) {
@@ -483,7 +516,7 @@ std::string to_string(const VVInt &a) {
 }
 
 // returns false if move impossible
-bool make_move(int i, int j, const Figure &f, int field[N][N]) {
+MakeMoveResult make_move(int i, int j, const Figure &f, int field[N][N]) {
   int x, y, l;
   int fill[N][N], after[N][N];
 
@@ -492,14 +525,14 @@ bool make_move(int i, int j, const Figure &f, int field[N][N]) {
     x = xy[0] + i;
     y = xy[1] + j;
     if (field[y][x]) {
-      return false;
+      return {false, 0};
     }
     fill[y][x] = 1;
   }
   copy(fill, after);
-  resetGetLinesScore(i, j, f, fill, after);
+  auto p = resetGetLinesScore(i, j, f, fill, after);
   copy(after, field);
-  return true;
+  return {true, p.second};
 }
 
 void from_string(const std::string &st, int field[N][N]) {
@@ -545,7 +578,8 @@ void from_string(const std::string &st, int field[N][N]) {
 
   for (; i < v.size(); i += 2) {
     b = make_move(v[i][0] - '0', v[i][1] - '0',
-                  ALL_FIGURES[gfigureIndex[v[i + 1][0] - '1']], field);
+                  ALL_FIGURES[gfigureIndex[v[i + 1][0] - '1']], field)
+            .valid;
     if (!b) {
       pr1("error {} {}", v[i], v[i + 1]);
       exit(1);
@@ -698,6 +732,7 @@ Info estimate(const VInt &vf, const int field[N][N], const VInt &figureIndex,
               const int code, const int lines) {
   Info r, e;
   VInt v2;
+  uint32_t est;
   int j, k;
   r.setInvalid();
   r.setPrizeInvalid();
@@ -750,9 +785,9 @@ Info estimate(const VInt &vf, const int field[N][N], const VInt &figureIndex,
       if (e.isInvalid())
         continue;
 
-      j = e.addFullEstimate(a);
-      if (r.fullestimate < j) {
-        r.fullestimate = j;
+      uint32_t est = e.addFullEstimate(a);
+      if (r.fullestimate < est) {
+        r.fullestimate = est;
         a.setLines(0);
         r.eq(0, i, a);
         if (vf.size() == 3) {
@@ -770,9 +805,9 @@ Info estimate(const VInt &vf, const int field[N][N], const VInt &figureIndex,
   return r;
 }
 
-std::vector<VInt> permutations(int n) {
-  std::vector<VInt> r;
-  std::vector<int> arr(n);
+VVInt permutations(int n) {
+  VVInt r;
+  VInt arr(n);
   std::iota(arr.begin(), arr.end(), 0);
   do {
     r.push_back(arr);
@@ -780,26 +815,34 @@ std::vector<VInt> permutations(int n) {
   return r;
 }
 
-bool same(const VInt &v, const int field[N][N]) {
-  int j = 0;
+int same(const VInt &v, const int field[N][N]) {
+  int j = 0, score, score0;
+  bool sameScore = 1;
   int t[N][N], a[N][N];
   for (auto &p : permutations(v.size())) {
     copy(field, t);
+    score = 0;
     for (auto &i : p) {
-      if (!make_move(best.gx(i), best.gy(i), ALL_FIGURES[v[best.n[i]]], t)) {
-        return false;
+      auto r = make_move(best.gx(i), best.gy(i), ALL_FIGURES[v[best.n[i]]], t);
+      if (!r.valid) {
+        return 0;
       }
+      score += r.score;
     }
     if (j) {
       if (!same(t, a)) {
-        return false;
+        return 0;
+      }
+      if (score0 != score) {
+        sameScore = 0;
       }
     } else {
+      score0 = score;
       copy(t, a);
     }
     j++;
   }
-  return true;
+  return sameScore ? 1 : 2;
 }
 
 std::string fillString(int i) {
@@ -863,6 +906,7 @@ std::string getPrizesString() {
 
 std::string bestString() {
   std::string s;
+  int i;
   auto start = std::chrono::steady_clock::now();
   VInt v = getNonEmptyIndex();
   if (v.empty() || v.size() > 3)
@@ -887,12 +931,20 @@ std::string bestString() {
     if (v.size() == 1) {
       best.n[0] = 0;
     } else {
-      s += std::string(same(v, field) ? "any order" : "order important") + "\n";
+      const std::string ss[] = {"order important", "any order",
+                                "different score"};
+      s += ss[same(v, field)] + "\n";
     }
-    s += "after " + fillString(best.getFieldc()) + "\n" + "after " +
-         possibleString(best.getPossibleAfter(), 1) + "\n" + "now " +
-         fillString(countFill(field)) + "\n" + "now " +
-         possibleString(countPossible(field), 1) + "\n";
+    std::string v[] = {fillString(best.get(FIELDS)),
+                       possibleString(best.get(POSSIBLE_AFTER), 1),
+                       fillString(countFill(field)),
+                       possibleString(countPossible(field), 1),
+                       std::to_string(best.get(SCORE)),
+                       std::to_string(best.totalLines())};
+    std::string v1[] = {"after", "after", "now", "now", "score", "lines"};
+    for (i = 0; i < std::size(v); i++) {
+      s += v1[i] + " " + v[i] + "\n";
+    }
   }
   auto end = std::chrono::steady_clock::now();
   auto elapsed =
@@ -1011,7 +1063,7 @@ void init() {
   gfigureIndex.resize(3);
 
   // for gtk newGame() do it
-#ifndef GTKMM_MAJOR_VERSION
+#ifndef GTK_MAJOR_VERSION
   gameBegin = std::chrono::steady_clock::now();
   best.setInvalid();
 #endif

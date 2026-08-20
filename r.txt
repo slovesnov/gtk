@@ -24,3 +24,11 @@ https://www.iconsdb.com/royal-blue-icons/dice-icon.html
 
 https://perchance.org/ai-icon-generator
 
+-----------------------------------------------
+ldd a.exe | grep -E '/mingw64' | awk '{print $3}'
+
+mkdir -p deploy/bin
+cp my_app.exe deploy/bin/
+ldd a.exe | grep -E '/mingw64|/ucrt64' | awk '{print $3}' | xargs -I {} cp {} deploy/bin/
+
+

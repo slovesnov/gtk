@@ -14,58 +14,21 @@
 #include <gtkmm/styleprovider.h>
 #include <gtkmm/textview.h>
 #include <gtkmm/window.h>
+#include <gtkmm/spinbutton.h>
+#include <gtkmm/label.h>
 #include <windows.h>
 #include "common.h"
 
-int timer = 1;
+bool timer = 1;
 int saveText = 0;
 const bool LOG = 1;
 const int TIMER_MILLISECONDS = 500;
 const int SAVE_TIMER_MILLISECONDS = 3000;
 const std::string LOG_FILE = "log.txt";
 const std::string SCREEN_DIR = "png";
-const double HIGHLIGHT_SUCCESS = .995;
-/*
-39 100.000%
-38 99.998%
-37 99.987%
-36 99.954%
-35 99.892%
-34 99.789%
-33 99.636%
-32 99.422%
-31 99.137%
-30 98.771%
-29 98.314%
-28 97.756%
-27 97.087%
-26 96.296%
-25 95.374%
-24 94.310%
-23 93.095%
-22 91.718%
-21 90.168%
-20 88.437%
-19 86.514%
-18 84.388%
-17 82.050%
-16 79.489%
-15 76.695%
-14 73.659%
-13 70.370%
-12 66.818%
-11 62.993%
-10 58.885%
-9 54.483%
-8 49.778%
-7 44.760%
-6 39.417%
-5 33.741%
-4 27.721%
-3 21.347%
-2 14.609%
-1 7.497%
-*/
+const int START_HIGHLIGHT_N = 33;
+int highlight_n = START_HIGHLIGHT_N;
+
 const int DX = 763 - 852;
 const int DY = 347 - 202;
 const int DX1 = 743 - 763;
@@ -92,7 +55,7 @@ const uint32_t POSSIBLE_COLOR[] = {
 };
 
 uint32_t BG_COLOR = 0xE6D8AD;
-// default color fo rebug mode
+// default color fo debug mode
 uint32_t figure_color[] = {0xff59ed9e, 0xffffb945, 0xff45dcf7};
 
 const std::string SAVE_PNG = "save png";
@@ -154,18 +117,144 @@ struct FigureStatistics {
   }
 };
 
-class Window : public Gtk::Window {
+class TMWindow : public Gtk::Window {
+public:
+  TMWindow(std::string title) {
+    m_title = title;
+    set_title(m_title);
+  }
+  std::string m_title;
+  HWND m_hwnd;
+
+  void setTopMost(bool topmost) {
+    if (topmost) {
+      SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
+    } else {
+      SetWindowPos(m_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER);
+    }
+  }
+
+  void on_show() override {
+    Gtk::Window::on_show();
+
+    m_hwnd = FindWindowA(NULL, m_title.c_str());
+    // make_always_on_top
+    setTopMost(1);
+  }
+};
+
+class OptionsDialog : public Gtk::Window {
+public:
+  OptionsDialog(TMWindow &parent) {
+    int i;
+    std::string s;
+    parent.setTopMost(false);
+    set_title("options");
+    set_transient_for(parent);
+    this->parent = &parent;
+    set_modal(true);
+    set_default_size(250, 450);
+
+    Gtk::Label *label = Gtk::make_managed<Gtk::Label>();
+    for (i = 39; i > 0; i--) {
+      if (i) {
+        s += "\n";
+      }
+      s += std::format("{} {}", i, fd(i));
+      if (i == 0) {
+        s += std::format(" start {}", START_HIGHLIGHT_N);
+      }
+    }
+    label->set_text(s);
+    label->set_wrap(true);
+    label->set_halign(Gtk::Align::START);
+
+    Gtk::ScrolledWindow *m_scrolled_window =
+        Gtk::make_managed<Gtk::ScrolledWindow>();
+
+    m_scrolled_window->set_policy(Gtk::PolicyType::NEVER,
+                                  Gtk::PolicyType::AUTOMATIC);
+    m_scrolled_window->set_propagate_natural_height(true);
+    m_scrolled_window->set_min_content_height(100);
+    m_scrolled_window->set_child(*label);
+
+    m_adjustment = Gtk::Adjustment::create(highlight_n, 1, 39, 1, 10, 0);
+    m_spin_button.set_adjustment(m_adjustment);
+    m_spin_button.set_numeric(true);
+
+    m_btn_cancel.set_label("cancel");
+    m_btn_ok.set_label("ok");
+
+    m_vbox.set_margin(12);
+    m_vbox.set_spacing(10);
+
+    m_hbox_buttons.set_spacing(3);
+    m_hbox_buttons.set_halign(Gtk::Align::END);
+    m_hbox_buttons.append(m_btn_cancel);
+    m_hbox_buttons.append(m_btn_ok);
+
+    auto box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 2);
+    box->append(m_spin_button);
+    box->append(m_label);
+
+    m_vbox.append(*box);
+    m_vbox.append(m_hbox_buttons);
+    m_vbox.append(*m_scrolled_window);
+
+    set_child(m_vbox);
+    update_label();
+
+    m_btn_cancel.signal_clicked().connect([this]() { close(); });
+
+    m_btn_ok.signal_clicked().connect([this]() {
+      highlight_n = m_spin_button.get_value();
+      close();
+    });
+
+    m_spin_button.signal_value_changed().connect([this]() { update_label(); });
+
+    signal_close_request().connect(
+        sigc::mem_fun(*this, &OptionsDialog::on_window_close), false);
+  }
+
+  bool on_window_close() {
+    parent->setTopMost(1);
+    return false;
+  }
+
+  void update_label() {
+    int v = m_spin_button.get_value();
+    m_label.set_text(fd(v));
+  }
+
+  std::string fd(int i) {
+    return std::format("{:.4f}%", successProbability(i) * 100);
+  }
+
+private:
+  Gtk::Box m_vbox{Gtk::Orientation::VERTICAL};
+  Gtk::Box m_hbox_buttons{Gtk::Orientation::HORIZONTAL};
+
+  Gtk::SpinButton m_spin_button;
+  Glib::RefPtr<Gtk::Adjustment> m_adjustment;
+
+  Gtk::Label m_label;
+  Gtk::Button m_btn_cancel;
+  Gtk::Button m_btn_ok;
+  TMWindow *parent;
+};
+
+class Window : public TMWindow {
 public:
   Window()
-      : m_buttonSave(SAVE_PNG), m_buttonSaveText(SAVE_TEXT),
-        m_buttonSearchPrize("search prize"), m_buttonTimer(),
-        m_buttonClearLog("clear log") {
+      : TMWindow("blocks timer"), m_buttonSave(SAVE_PNG),
+        m_buttonClearLog("clear log"), m_buttonSaveText(SAVE_TEXT),
+        m_buttonTimer(), m_buttonOptions("options") {
     int i;
 
     set_resizable(false);
-    m_title = std::format("gtkmm {}.{}.{}", GTKMM_MAJOR_VERSION,
-                          GTKMM_MINOR_VERSION, GTKMM_MICRO_VERSION);
-    set_title(m_title);
 
     auto display = Gdk::Display::get_default();
     auto icon_theme = Gtk::IconTheme::get_for_display(display);
@@ -195,7 +284,7 @@ public:
     box->append(m_buttonClearLog);
     box->append(m_buttonSaveText);
     box->append(m_buttonTimer);
-    box->append(m_buttonSearchPrize);
+    box->append(m_buttonOptions);
     box->append(m_text_view[2]);
     box->append(m_drawing_area);
     box->append(m_scrolled_window[1]);
@@ -214,19 +303,12 @@ public:
     m_buttonSave.signal_clicked().connect(
         [this]() { updateSaveButton(savePng()); });
 
+    m_buttonClearLog.signal_clicked().connect(
+        [this]() { std::filesystem::remove(fullPath(LOG_FILE)); });
+
     m_buttonSaveText.signal_clicked().connect([this]() {
       saveText = 1;
       m_buttonSaveText.set_label("waiting...");
-    });
-
-    m_buttonSearchPrize.signal_clicked().connect([this]() {
-      if (timer) {
-        timer = 0;
-        setButtonTimerText();
-      }
-      int i = 1;
-      m_out[i] = getPrizesString();
-      m_text_view[i].get_buffer()->set_text(m_out[i]);
     });
 
     m_buttonTimer.signal_clicked().connect([this]() {
@@ -234,7 +316,17 @@ public:
       setButtonTimerText();
     });
 
-    m_buttonClearLog.signal_clicked().connect([this]() { removeLog(); });
+    m_buttonOptions.signal_clicked().connect([this]() {
+      bool b = timer;
+      if (b) {
+        timer = 0;
+      }
+      auto dialog = Gtk::make_managed<OptionsDialog>(*this);
+      dialog->set_visible(true);
+      if (b) {
+        timer = 1;
+      }
+    });
 
     setButtonTimerText();
 
@@ -242,9 +334,13 @@ public:
     newGame();
 
     auto buffer = m_text_view[2].get_buffer();
-    m_highlight_tag = buffer->create_tag("my_yellow_highlight");
-    m_highlight_tag->property_background() = "yellow";
-    m_highlight_tag->property_foreground() = "black";
+    i = 0;
+    for (auto &a : m_highlight_tag) {
+      a = buffer->create_tag(std::to_string(i));
+      a->property_background() = i ? "red" : "yellow";
+      // a->property_foreground() = "black";
+      i++;
+    }
 
     if (LOG)
       std::filesystem::create_directories("./" + SCREEN_DIR);
@@ -253,15 +349,14 @@ public:
                                    TIMER_MILLISECONDS);
   }
 
-  void highlightText(bool highlight) {
+  void highlightText(int n) {
     auto buffer = m_text_view[2].get_buffer();
     Gtk::TextBuffer::iterator start = buffer->begin();
     Gtk::TextBuffer::iterator end = buffer->end();
 
-    if (highlight) {
-      buffer->apply_tag(m_highlight_tag, start, end);
-    } else {
-      buffer->remove_all_tags(start, end);
+    buffer->remove_all_tags(start, end);
+    if (n != -1) {
+      buffer->apply_tag(m_highlight_tag[n], start, end);
     }
   }
 
@@ -466,8 +561,6 @@ public:
     file.close();
   }
 
-  void removeLog() { std::filesystem::remove(fullPath(LOG_FILE)); }
-
   bool tick() {
     int i;
     bool b;
@@ -483,9 +576,14 @@ public:
       for (i = 0; i < NT; i++) {
         m_text_view[i].get_buffer()->set_text(m_out[i]);
       }
-      if (!best.isInvalid())
-        highlightText(successProbability(best.getPossibleAfter()) <
-                      HIGHLIGHT_SUCCESS);
+      if (!best.isInvalid()) {
+        if (best.isPrizeInvalid()) {
+          i = best.getPossibleAfter() <= highlight_n ? 0 : -1;
+        } else {
+          i = 1;
+        }
+        highlightText(i);
+      }
     }
     return !DEBUG_MODE;
   }
@@ -617,32 +715,20 @@ public:
   }
 
 public:
-  void on_show() override {
-    Gtk::Window::on_show();
-
-    // make_always_on_top
-#ifdef _WIN32
-    HWND hwnd = FindWindowA(NULL, m_title.c_str());
-    if (hwnd != NULL) {
-      SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-    }
-#endif
-  }
   Gtk::ScrolledWindow m_scrolled_window[NT];
   Gtk::TextView m_text_view[NT];
   std::string m_out[NT];
-  Gtk::Button m_buttonSave, m_buttonSaveText, m_buttonTimer,
-      m_buttonSearchPrize, m_buttonClearLog;
+  Gtk::Button m_buttonSave, m_buttonSaveText, m_buttonTimer, m_buttonOptions,
+      m_buttonClearLog;
   Gtk::DrawingArea m_drawing_area;
   std::string m_prev, m_prevfields;
   std::vector<FigureStatistics> m_figureStatistics;
-  std::string m_title;
-  Glib::RefPtr<Gtk::TextTag> m_highlight_tag;
+  Glib::RefPtr<Gtk::TextTag> m_highlight_tag[2];
 };
 
 int main(int argc, char *argv[]) {
   auto app = Gtk::Application::create("com.example.myapp"
-                                      // ,  Gio::Application::Flags::NON_UNIQUE
+                                      // , Gio::Application::Flags::NON_UNIQUE
   );
   app->signal_startup().connect([app, argv]() {
     app_dir = std::filesystem::absolute(argv[0]).parent_path();

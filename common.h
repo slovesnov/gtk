@@ -200,7 +200,8 @@ int findFigureIndex(std::string code) {
 
 struct Info {
   int x, y, x1, y1, x2, y2, lines, field[N][N], n[3], nlines[3], prize_x,
-      prize_y, fullestimate;
+      prize_y;
+  uint32_t fullestimate;
   bool end, prize_add;
   // field - field after move
   void operator=(const Info &e) {
@@ -231,7 +232,7 @@ struct Info {
     copy(_field, field);
     setPrizeInvalid();
     fullestimate =
-        (_possibleAfter * 100 + (64 - countFill(field))) * 100 + _estimate;
+        (_possibleAfter * 100 + (N * N - countFill(field))) * 100 + _estimate;
   }
 
   int getEstimate() { return fullestimate % 100; }

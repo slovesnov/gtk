@@ -247,8 +247,32 @@ int findFigureIndex(std::string code) {
   return std::distance(std::begin(ALL_FIGURES), it);
 }
 
+template <size_t N>
+constexpr std::array<int, N> calculate_suffix_sums(const int (&bits)[N]) {
+  std::array<int, N> result{};
+  for (size_t i = 1; i < N; ++i) {
+    int sum = 0;
+    for (size_t j = i; j < N; ++j) {
+      sum += bits[j];
+    }
+    result[i - 1] = sum;
+  }
+  result[N - 1] = 0;
+
+  return result;
+}
+
+enum{
+
+}
+
+const int POSSIBLE_AFTER=0;
+const int SCORE=1;
+const int FIELDC=2;
+const int ESTIMATE=3;
+
 struct Info {
-  int x, y, x1, y1, x2, y2, lines, score, field[N][N], n[3], nlines[3], prize_x,
+  int x, y, x1, y1, x2, y2, lines, field[N][N], n[3], nlines[3], prize_x,
       prize_y;
   uint32_t fullestimate;
   bool end, prize_add;
@@ -261,7 +285,6 @@ struct Info {
     x2 = e.x2;
     y2 = e.y2;
     lines = e.lines;
-    score = e.score;
     end = e.end;
     copy(e.field, field);
     std::copy(e.n, e.n + 3, n);
@@ -272,24 +295,41 @@ struct Info {
     fullestimate = e.fullestimate;
   }
 
+  /*
+  possibleAfter 1-39, 6bits
+  score(sam be summed) 1- 9+360=369 9bits
+  64-fieldC 0-64, 8bits
+  estimate(sam be summed) for figure with <=5 dots <=3*5, for square3(only
+  figure with >5 dots) 4sorners*2+4*1=10 4bits
+  */
+  inline static const int BITS[] = {6, 9, 8, 4};
+  inline static const std::array<int, std::size(BITS)> SBITS =
+      calculate_suffix_sums(BITS);
+
+
   Info() {}
   Info(int _x, int _y, int _estimate, std::pair<int, int> linesScore, bool _end,
        int _possibleAfter, int _field[N][N]) {
     x = _x;
     y = _y;
-    std::tie(lines, score) = linesScore;
     end = _end;
+    lines = linesScore.first;
     copy(_field, field);
     setPrizeInvalid();
-    fullestimate =
-        (_possibleAfter * 100 + (N * N - countFill(field))) * 100 + _estimate;
+    int v[] = {_possibleAfter, linesScore.second, N * N - countFill(field),
+               _estimate};
+    int i;
+    fullestimate = 0;
+    for (i = 0; i < std::size(v); i++) {
+      fullestimate |= v[i] << SBITS[i];
+    }
   }
 
-  int getEstimate() { return fullestimate % 100; }
+  int get(int i)const{
+      return (fullestimate >> SBITS[i]) & ((1 << BITS[i]) - 1);
+  }
 
-  int getFieldc() { return N * N - (fullestimate / 100) % 100; }
-
-  int getPossibleAfter() { return fullestimate / 10000; }
+  int addFullEstimate(const Info &a) { return fullestimate + a.getEstimate(); }
 
   void setLines(int i) { nlines[i] = lines; }
 
@@ -602,7 +642,7 @@ int countPossible(const int field[N][N]) {
 VInfo possibleMoves(const Figure &f, const VInt &recent, const int field[N][N],
                     bool fromEstimate = false) {
   int i, j, e, x, y, possible, fill[N][N], after[N][N];
-  std::pair<int,int>p;
+  std::pair<int, int> p;
   bool end;
   VInfo vi;
   for (j = 0; j <= N - f.height; j++) {
@@ -710,7 +750,7 @@ Info estimate(const VInt &vf, const int field[N][N], const VInt &figureIndex,
       if (e.isInvalid())
         continue;
 
-      j = e.fullestimate + a.getEstimate();
+      j = e.addFullEstimate(a);
       if (r.fullestimate < j) {
         r.fullestimate = j;
         a.setLines(0);

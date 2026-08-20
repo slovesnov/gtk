@@ -17,12 +17,13 @@
 #include <gtkmm/spinbutton.h>
 #include <gtkmm/label.h>
 #include <gtkmm/checkbutton.h>
+#include <gtkmm/frame.h>
 #include <windows.h>
 #include "common.h"
 
 bool timer = 1;
 const bool LOG = 1;
-const int TIMER_MILLISECONDS = 1000;//500
+const int TIMER_MILLISECONDS = 1000; // 500
 const int SAVE_TIMER_MILLISECONDS = 3000;
 const std::string LOG_FILE = "log.txt";
 const std::string SCREEN_DIR = "png";
@@ -188,7 +189,7 @@ public:
     m_spin_button.set_adjustment(m_adjustment);
     m_spin_button.set_numeric(true);
 
-    m_btn_cancel.set_label("cancel");
+    m_buttonClearLog.set_label("clear log");
     m_btn_ok.set_label("ok");
 
     m_vbox.set_margin(12);
@@ -196,7 +197,7 @@ public:
 
     m_hbox_buttons.set_spacing(3);
     m_hbox_buttons.set_halign(Gtk::Align::END);
-    m_hbox_buttons.append(m_btn_cancel);
+    m_hbox_buttons.append(m_buttonClearLog);
     m_hbox_buttons.append(m_btn_ok);
 
     auto box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 2);
@@ -204,14 +205,42 @@ public:
     box->append(m_label);
 
     m_vbox.append(*box);
-    const std::string v[] = {"possible", "fill","figure" };
+
+    m_frame = Gtk::make_managed<Gtk::Frame>();
+    m_frame_checkbox = Gtk::make_managed<Gtk::CheckButton>("set / clear all");
+    m_frame_checkbox->set_active(show_statistics[1]|| show_statistics[2] );
+    m_frame->set_label_widget(*m_frame_checkbox);
+    auto *frame_content_box =
+        Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL);
+    frame_content_box->set_margin(12);
+    frame_content_box->set_spacing(6);
+    m_frame->set_child(*frame_content_box);
+
+    m_frame_checkbox->signal_toggled().connect([frame_content_box, this]() {
+      bool is_active = m_frame_checkbox->get_active();
+      for (int i = 1; i < 3; i++) {
+        m_check[i].set_active(is_active);
+      }
+    });
+
+    const std::string v[] = {"possible", "fill", "figure"};
     i = 0;
     for (auto &a : m_check) {
-      a.set_label(v[i] + " statistics");
+      a.set_label("show " + v[i] + " statistics");
       a.set_active(show_statistics[i]);
-      m_vbox.append(a);
+      if (i) {
+        frame_content_box->append(a);
+      } else {
+        m_vbox.append(a);
+      }
       i++;
     }
+
+    m_main_vbox.set_margin(12);
+    m_main_vbox.append(*m_frame);
+
+    m_vbox.append(m_main_vbox);
+
     m_vbox.append(m_hbox_buttons);
 
     box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 2);
@@ -221,7 +250,8 @@ public:
     set_child(*box);
     update_label();
 
-    m_btn_cancel.signal_clicked().connect([this]() { close(); });
+    m_buttonClearLog.signal_clicked().connect(
+        [this]() { std::filesystem::remove(fullPath(LOG_FILE)); });
 
     m_btn_ok.signal_clicked().connect([this]() {
       highlight_n = m_spin_button.get_value();
@@ -261,17 +291,20 @@ private:
   Glib::RefPtr<Gtk::Adjustment> m_adjustment;
 
   Gtk::Label m_label;
-  Gtk::Button m_btn_cancel;
-  Gtk::Button m_btn_ok;
+  Gtk::Button m_btn_ok, m_buttonClearLog;
+
+  Gtk::Box m_main_vbox{Gtk::Orientation::VERTICAL};
+  Gtk::Frame *m_frame;
+  Gtk::CheckButton *m_frame_checkbox;
+
   TMWindow *parent;
 };
 
 class Window : public TMWindow {
 public:
   Window()
-      : TMWindow("blocks game"), m_buttonSave(SAVE_PNG),
-        m_buttonClearLog("clear log"), m_buttonTimer(),
-        m_buttonOptions("options") {
+      : TMWindow("blocks game"), m_buttonSave(SAVE_PNG), m_buttonTimer(),
+        m_buttonSearchPrize("search prize"), m_buttonOptions("options") {
     int i;
 
     set_resizable(false);
@@ -300,9 +333,10 @@ public:
     }
 
     auto box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
-    box->append(m_buttonSave);
-    box->append(m_buttonClearLog);
+    // box->append(m_buttonSave);
     box->append(m_buttonTimer);
+    // need if only bad configurations available
+    box->append(m_buttonSearchPrize);
     box->append(m_buttonOptions);
     box->append(m_text_view[2]);
     box->append(m_drawing_area);
@@ -322,12 +356,19 @@ public:
     m_buttonSave.signal_clicked().connect(
         [this]() { updateSaveButton(savePng()); });
 
-    m_buttonClearLog.signal_clicked().connect(
-        [this]() { std::filesystem::remove(fullPath(LOG_FILE)); });
-
     m_buttonTimer.signal_clicked().connect([this]() {
       timer = !timer;
       setButtonTimerText();
+    });
+
+    m_buttonSearchPrize.signal_clicked().connect([this]() {
+      if (timer) {
+        timer = 0;
+        setButtonTimerText();
+      }
+      int i = 1;
+      m_out[i] = getPrizesString();
+      m_text_view[i].get_buffer()->set_text(m_out[i]);
     });
 
     m_buttonOptions.signal_clicked().connect([this]() {
@@ -720,7 +761,8 @@ public:
   Gtk::ScrolledWindow m_scrolled_window[NT];
   Gtk::TextView m_text_view[NT];
   std::string m_out[NT];
-  Gtk::Button m_buttonSave, m_buttonTimer, m_buttonOptions, m_buttonClearLog;
+  // search prize need if only bad moves found
+  Gtk::Button m_buttonSave, m_buttonTimer, m_buttonOptions, m_buttonSearchPrize;
   Gtk::DrawingArea m_drawing_area;
   std::string m_prev, m_prevfields;
   std::vector<FigureStatistics> m_figureStatistics;

@@ -285,10 +285,13 @@ int findFigureIndex(std::string code) {
   return std::distance(std::begin(ALL_FIGURES), it);
 }
 
-const int POSSIBLE_AFTER = 0;
-const int FIELDS = 1;
-const int SCORE = 2;
-const int ESTIMATE = 3;
+#define FIELDS_FIRST
+
+#ifdef FIELDS_FIRST
+enum { POSSIBLE_AFTER, FIELDS, SCORE, ESTIMATE };
+#else
+enum { POSSIBLE_AFTER, SCORE, FIELDS, ESTIMATE };
+#endif
 
 struct Info {
   int x, y, x1, y1, x2, y2, lines, field[N][N], n[3], nlines[3], prize_x,
@@ -315,7 +318,8 @@ struct Info {
   }
 
   /*Note on change order need change constants POSSIBLE_AFTER,
-  FIELDS, SCORE, ESTIMATE and Params v = {_possibleAfter, N * N - countFill(field), linesScore.second,  _estimate};
+  FIELDS, SCORE, ESTIMATE and Params v = {_possibleAfter, N * N -
+  countFill(field), linesScore.second,  _estimate};
   - possibleAfter 1-39, 6bits
   - 64-fieldC 0-64, 8bits
   - score (can be summed) 1- 9+360=369 9bits
@@ -363,14 +367,20 @@ struct Info {
     lines = linesScore.first;
     copy(_field, field);
     setPrizeInvalid();
-    Params v = {_possibleAfter, N * N - countFill(field), linesScore.second,
-                _estimate};
+    Params v = {
+#ifdef FIELDS_FIRST
+        _possibleAfter, N * N - countFill(field), linesScore.second, _estimate
+#else
+        _possibleAfter, linesScore.second, N * N - countFill(field), _estimate
+#endif
+
+    };
     fullestimate = countEstimate(v);
   }
 
   static uint32_t countEstimate(Params v) {
     int i, e = 0;
-    for (i = 0; i < std::size(BITS); i++) {
+    for (i = 0; i < TOTAL_PARAMS; i++) {
       e |= v[i] << SBITS[i];
     }
     return e;
@@ -397,7 +407,7 @@ struct Info {
   uint32_t addFullEstimate(const Info &p) const {
     auto t = get();
     auto m = p.get();
-    for (auto a : {SCORE, ESTIMATE}) {
+    for (int a : {SCORE, ESTIMATE}) {
       if (t[a] + m[a] >= 1 << BITS[a]) {
         pr1("error {} {} {} {}", a, t[a], m[a], 1 << BITS[a]);
       }

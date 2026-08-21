@@ -20,16 +20,15 @@ const bool DEBUG_MODE = NF != -1;
 
 // allow any number of moves 0-3
 const std::string fixed_field[] = {
-    R"(00000000
-00111100
+    R"(01010000
+00010000
+00010000
 00000000
-01111100
 00000000
-00000010
-11000010
-11000010
-1-11 01 11-11
-)",
+00101000
+10111101
+00111110
+001 001 111-111-111 101)",
 
     R"(11101101
 00000110
@@ -92,7 +91,7 @@ const std::unordered_map<std::string, std::string> MAP = {
 std::chrono::steady_clock::time_point gameBegin;
 bool startFromEmptyField = 0;
 VInt gfigureIndex;
-int field[N][N];
+bool field[N][N];
 std::set<uint32_t> set2;
 std::string hs;
 #ifdef USE_SKIPC
@@ -132,15 +131,15 @@ void print_line_helper(std::source_location loc, Args &&...args) {
 #define pr1 PRINT
 #define pri PRINT_LINE1("")
 
-bool same(int f1[N][N], int f2[N][N]) {
+bool same(const bool f1[N][N], const bool f2[N][N]) {
   return std::equal(&f1[0][0], &f1[0][0] + N * N, &f2[0][0]);
 }
 
-void copy(const int src[N][N], int dest[N][N]) {
+void copy(const bool src[N][N], bool dest[N][N]) {
   std::copy(&src[0][0], &src[0][0] + N * N, &dest[0][0]);
 }
 
-int countFill(const int field[N][N]) {
+int countFill(const bool field[N][N]) {
   int i, j, c = 0;
   for (i = 0; i < N; i++) {
     for (j = 0; j < N; j++) {
@@ -285,7 +284,7 @@ int findFigureIndex(std::string code) {
   return std::distance(std::begin(ALL_FIGURES), it);
 }
 
-bool hasPossibleMoves(const Figure &f, const int field[N][N]) {
+bool hasPossibleMoves(const Figure &f, const bool field[N][N]) {
   int x, y;
   for (x = 0; x <= N - f.width; x++) {
     for (y = 0; y <= N - f.height; y++) {
@@ -301,7 +300,7 @@ bool hasPossibleMoves(const Figure &f, const int field[N][N]) {
   return false;
 }
 
-bool possibleRectange(int i, int j, const int field[N][N], int w, int h) {
+bool possibleRectange(bool i, bool j, const bool field[N][N], int w, int h) {
   int x, y;
   for (x = 0; x < w; x++) {
     for (y = 0; y < h; y++) {
@@ -312,7 +311,7 @@ bool possibleRectange(int i, int j, const int field[N][N], int w, int h) {
   return true;
 }
 
-bool possibleRectange(const int field[N][N], int w, int h) {
+bool possibleRectange(const bool field[N][N], int w, int h) {
   int x, y;
   for (x = 0; x <= N - w; x++) {
     for (y = 0; y <= N - h; y++) {
@@ -324,19 +323,19 @@ bool possibleRectange(const int field[N][N], int w, int h) {
   return false;
 }
 
-bool possibleSquare3(const int field[N][N]) {
+bool possibleSquare3(const bool field[N][N]) {
   return possibleRectange(field, 3, 3);
 }
 
-bool possibleV(const int field[N][N], int n) {
+bool possibleV(const bool field[N][N], int n) {
   return possibleRectange(field, 1, n);
 }
 
-bool possibleH(const int field[N][N], int n) {
+bool possibleH(const bool field[N][N], int n) {
   return possibleRectange(field, n, 1);
 }
 
-int countPossible(const int field[N][N]) {
+int countPossible(const bool field[N][N]) {
   int i, j;
   bool square3 = possibleSquare3(field), h5, v5;
   if (square3) {
@@ -364,10 +363,9 @@ enum { POSSIBLE_AFTER, SCORE, FIELDS, ESTIMATE };
 #endif
 
 struct Info {
-  int x, y, x1, y1, x2, y2, lines, field[N][N], n[3], nlines[3], prize_x,
-      prize_y;
+  int x, y, x1, y1, x2, y2, lines, n[3], nlines[3], prize_x, prize_y;
+  bool field[N][N], end, prize_add;
   uint32_t fullestimate;
-  bool end, prize_add;
   // field - field after move
   void operator=(const Info &e) {
     x = e.x;
@@ -430,7 +428,7 @@ struct Info {
 
   Info() {}
   Info(int _x, int _y, int _estimate, std::pair<int, int> linesScore, bool _end,
-       int _field[N][N]) {
+       bool _field[N][N]) {
     x = _x;
     y = _y;
     end = _end;
@@ -560,7 +558,7 @@ struct Prev {
 } previous[4];
 
 std::pair<int, int> resetGetLinesScore(int i, int j, const Figure &f,
-                                       int fill[N][N], int after[N][N]) {
+                                       bool fill[N][N], bool after[N][N]) {
   int l = 0, x, y, score = 0;
   copy(fill, after);
 
@@ -590,7 +588,7 @@ std::pair<int, int> resetGetLinesScore(int i, int j, const Figure &f,
   return {l, f.squares() + l * l * 10};
 }
 
-std::string to_string(const int field[N][N]) {
+std::string to_string(const bool field[N][N]) {
   std::string s;
   int i, j;
   for (j = 0; j < N; j++) {
@@ -615,9 +613,9 @@ std::string to_string(const VVInt &a) {
 }
 
 // returns false if move impossible
-MakeMoveResult make_move(int i, int j, const Figure &f, int field[N][N]) {
+MakeMoveResult make_move(int i, int j, const Figure &f, bool field[N][N]) {
   int x, y, l;
-  int fill[N][N], after[N][N];
+  bool fill[N][N], after[N][N];
 
   copy(field, fill);
   for (auto &xy : f.xy) {
@@ -634,7 +632,7 @@ MakeMoveResult make_move(int i, int j, const Figure &f, int field[N][N]) {
   return {true, p.second};
 }
 
-void from_string(const std::string &st, int field[N][N]) {
+void from_string(const std::string &st, bool field[N][N]) {
   int i = 0, j = -1;
   bool b;
   VString v;
@@ -703,8 +701,9 @@ std::string gameTimeString() {
 }
 
 VInfo possibleMoves(const Figure &f, const VInt &recent,
-                    const int field[N][N]) {
-  int i, j, e, x, y, fill[N][N], after[N][N];
+                    const bool field[N][N]) {
+  int i, j, e, x, y;
+  bool fill[N][N], after[N][N];
   std::pair<int, int> p;
   bool end;
   VInfo vi;
@@ -748,7 +747,7 @@ VInfo possibleMoves(const Figure &f, const VInt &recent,
 
 int index3(int i, int j) { return j + (i <= j); }
 
-Info estimate(const VInt &vf, const int field[N][N], const VInt &figureIndex,
+Info estimate(const VInt &vf, const bool field[N][N], const VInt &figureIndex,
               const int code, const int lines) {
   Info r, e;
   VInt v2;
@@ -839,10 +838,10 @@ VVInt permutations(int n) {
   return r;
 }
 
-int same(const VInt &v, const int field[N][N]) {
+int same(const VInt &v, const bool field[N][N]) {
   int j = 0, score, score0;
   bool sameScore = 1;
-  int t[N][N], a[N][N];
+  bool t[N][N], a[N][N];
   for (auto &p : permutations(v.size())) {
     copy(field, t);
     score = 0;
@@ -883,8 +882,8 @@ void findBest() {
 
 VInfo getPrizesInfo() {
   VInfo v;
-  int i, j, original[N][N];
-  bool b;
+  int i, j;
+  bool b, original[N][N];
   copy(field, original);
   for (i = 0; i < N; i++) {
     for (j = 0; j < N; j++) {

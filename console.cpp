@@ -10,20 +10,15 @@ int main() {
 
   init();
 
-  for (auto &a : ALL_FIGURES) {
-    if (a.squares() > 5) {
-      pr(a.to_string());
-    }
-  }
-
   parseInitialString();
-  for (auto a : gfigureIndex) {
-    pr(ALL_FIGURES[a].name)
-  }
+  // for (auto a : gfigureIndex) {
+  //   pr(ALL_FIGURES[a].name)
+  // }
   pr(to_string(field));
   pr(bestString());
-  if (!best.isInvalid()) {
-    pr(best.movesString());
-    pr(best.get(SCORE));
-  }
+  pr(possibleSquare3(field));
+  // if (!best.isInvalid()) {
+  //   pr(best.movesString());
+  //   pr(best.get(SCORE));
+  // }
 }

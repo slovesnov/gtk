@@ -20,15 +20,15 @@ const bool DEBUG_MODE = NF != -1;
 
 // allow any number of moves 0-3
 const std::string fixed_field[] = {
-    R"(01010000
-00010000
-00010000
-00000000
-00000000
-00101000
-10111101
-00111110
-001 001 111-111-111 101)",
+    R"(11010010
+10001110
+11000000
+00111010
+00101010
+00001110
+00110100
+11111100
+11 10 11-11 10 10-111 111 111)",
 
     R"(11101101
 00000110
@@ -99,30 +99,20 @@ std::set<uint32_t> set2;
 int skipc2;
 #endif
 
-// pr1("error {} {}", v[i], v[i + 1]);
-#define pr1(fmt, ...)                                                          \
-  std::cout << std::format(fmt " {}:{}\n" __VA_OPT__(, )                       \
-                               __VA_ARGS__ __VA_OPT__(, )                      \
-                                   std::source_location::current()             \
-                                       .file_name(),                           \
-                           std::source_location::current().line());
+std::string make_string_spaced() { return ""; }
+
+template <typename First, typename... Args>
+std::string make_string_spaced(const First &first, const Args &...args) {
+  std::ostringstream ss;
+  ss << first;
+  ((ss << " " << args), ...);
+  return ss.str();
+}
 
 template <typename... Args>
 void print_line_helper(std::source_location loc, Args &&...args) {
-  bool first = true;
-
-  auto print_with_space = [&](auto &&arg) {
-    if (!first) {
-      std::cout << " ";
-    }
-    first = false;
-    std::cout << std::forward<decltype(arg)>(arg);
-  };
-
-  (print_with_space(std::forward<Args>(args)), ...);
-
   if constexpr (sizeof...(Args) > 0) {
-    std::cout << " ";
+    std::cout << make_string_spaced(args...) << " ";
   }
   std::cout << loc.file_name() << ":" << loc.line() << "\n";
 }
@@ -132,6 +122,14 @@ void print_line_helper(std::source_location loc, Args &&...args) {
   print_line_helper(std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);
 
 #define pri pr()
+
+// pr1("error {} {}", v[i], v[i + 1]);
+#define pr1(fmt, ...)                                                          \
+  std::cout << std::format(fmt " {}:{}\n" __VA_OPT__(, )                       \
+                               __VA_ARGS__ __VA_OPT__(, )                      \
+                                   std::source_location::current()             \
+                                       .file_name(),                           \
+                           std::source_location::current().line());
 
 bool same(const bool f1[N][N], const bool f2[N][N]) {
   return std::equal(&f1[0][0], &f1[0][0] + N * N, &f2[0][0]);
@@ -404,9 +402,9 @@ struct Info {
 
   inline static constexpr Params SBITS = []() {
     Params arr{};
-    for (size_t i = 1; i < TOTAL_PARAMS; ++i) {
+    for (int i = 1; i < TOTAL_PARAMS; ++i) {
       int sum = 0;
-      for (size_t j = i; j < TOTAL_PARAMS; ++j) {
+      for (int j = i; j < TOTAL_PARAMS; ++j) {
         sum += BITS[j];
       }
       arr[i - 1] = sum;
@@ -604,10 +602,10 @@ std::string to_string(const VVInt &a) {
   return join(v, ' ');
 }
 
-// returns false if move impossible
-MakeMoveResult make_move(int i, int j, const Figure &f, bool field[N][N]) {
+MakeMoveResult make_move(int i, int j, const int findex, bool field[N][N]) {
   int x, y;
   bool fill[N][N], after[N][N];
+  const Figure &f = ALL_FIGURES[findex];
 
   copy(field, fill);
   for (auto &xy : f.xy) {
@@ -666,8 +664,8 @@ void from_string(const std::string &st, bool field[N][N]) {
   }
 
   for (; i < int(v.size()); i += 2) {
-    b = make_move(v[i][0] - '0', v[i][1] - '0',
-                  ALL_FIGURES[gfigureIndex[v[i + 1][0] - '1']], field)
+    b = make_move(v[i][0] - '0', v[i][1] - '0', gfigureIndex[v[i + 1][0] - '1'],
+                  field)
             .valid;
     if (!b) {
       pr1("error {} {}", v[i], v[i + 1]);
@@ -692,12 +690,12 @@ std::string gameTimeString() {
   return std::format("time {:%T}{}\n", sec, startFromEmptyField ? "" : "*");
 }
 
-VInfo possibleMoves(const Figure &f, const VInt &recent,
-                    const bool field[N][N]) {
+VInfo possibleMoves(int findex, const VInt &recent, const bool field[N][N]) {
   int i, j, e, x, y;
   bool fill[N][N], after[N][N], end;
   PIntInt p;
   VInfo vi;
+  const Figure &f = ALL_FIGURES[findex];
   for (j = 0; j <= N - f.height; j++) {
     for (i = 0; i <= N - f.width; i++) {
       e = 0;
@@ -757,7 +755,7 @@ Info estimate(const VInt &vf, const bool field[N][N], const VInt &figureIndex,
   }
 
   for (auto &i : vi) {
-    auto v = possibleMoves(ALL_FIGURES[vf[i]], {}, field);
+    auto v = possibleMoves(vf[i], {}, field);
 
     if (vf.size() == 1) {
       if (v.empty())
@@ -836,7 +834,7 @@ int same(const VInt &v, const bool field[N][N]) {
     copy(field, t);
     score = 0;
     for (auto &i : p) {
-      auto r = make_move(best.gx(i), best.gy(i), ALL_FIGURES[v[best.n[i]]], t);
+      auto r = make_move(best.gx(i), best.gy(i), v[best.n[i]], t);
       if (!r.valid) {
         return 0;
       }
@@ -882,7 +880,7 @@ VInfo getPrizesInfo() {
         field[j][i] = 0;
       } else {
         copy(original, field);
-        make_move(i, j, ALL_FIGURES[DOT_INDEX], field);
+        make_move(i, j, DOT_INDEX, field);
       }
 
       findBest();
@@ -901,11 +899,56 @@ VInfo getPrizesInfo() {
   return v;
 }
 
+// make any first move non end game and try use parize after first move
+VInfo getPrizesInfo1() {
+  VInfo v;
+  Info info;
+  int i, orig;
+  bool original[N][N];
+  auto ne = getNonEmptyIndex();
+  // todo skip same
+  for (i = 0; i < 3; i++) {
+    if (gfigureIndex[i] == ALL_COUNT) {
+      continue;
+    }
+    orig = gfigureIndex[i];
+    gfigureIndex[i] = ALL_COUNT;
+
+    auto v = possibleMoves(orig, getNonEmptyIndex(), field);
+    for (auto &p : v) {
+      if (!p.end) {
+        copy(field, original);
+        make_move(p.x, p.y, orig, field);
+        findBest();
+        if (!best.isInvalid()) { // todo
+          info.x = p.x;
+          info.y = p.y;
+          info.n[0] = i;
+          v.push_back(info);
+        }
+        copy(original, field);
+      }
+    }
+    gfigureIndex[i] = orig;
+  }
+  return v;
+}
+
 std::string getPrizesString() {
   std::string s;
   auto v = getPrizesInfo();
   if (v.empty()) {
-    return ALWAYS_GAME_OVER;
+    v = getPrizesInfo1();
+    if (v.empty())
+      return ALWAYS_GAME_OVER;
+    else {
+      // seems never happens
+      s = "first move and prize after\n";
+      for (auto &a : v) {
+        s += std::format("{}{}={}\n", a.x, a.y, a.n[0]);
+      }
+      return s;
+    }
   }
   std::sort(v.begin(), v.end());
   for (auto &a : v) {

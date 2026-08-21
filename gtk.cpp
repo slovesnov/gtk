@@ -160,7 +160,7 @@ public:
     set_transient_for(parent);
     this->parent = &parent;
     set_modal(true);
-    set_default_size(350, 450);
+    set_default_size(280, 450);
 
     Gtk::Label *label = Gtk::make_managed<Gtk::Label>();
     for (i = ALL_COUNT; i > 0; i--) {
@@ -687,7 +687,7 @@ public:
         }
       }
 
-      auto v = possibleMoves(a, recent, field);
+      auto v = possibleMoves(f, recent, field);
       std::sort(v.begin(), v.end());
       se += a.name + "\n";
       for (auto &e : v) {

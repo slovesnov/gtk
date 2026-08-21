@@ -343,6 +343,15 @@ public:
     box->append(m_buttonSearchPrize);
     box->append(m_text_view[2]);
     box->append(m_drawing_area);
+
+    box1 = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 7);
+    for (auto &a : m_label) {
+      a.get_style_context()->add_class("d");
+      box1->append(a);
+    }
+    box1->set_halign(Gtk::Align::CENTER);
+    box->append(*box1);
+
     box->append(m_scrolled_window[1]);
 
     box1 = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL);
@@ -389,7 +398,6 @@ public:
     for (auto &a : m_highlight_tag) {
       a = buffer->create_tag(std::to_string(i));
       a->property_background() = i ? "red" : "yellow";
-      // a->property_foreground() = "black";
       i++;
     }
 
@@ -480,12 +488,14 @@ public:
       cr->fill();
     }
 
+    std::string s, s1[3];
     if (!best.isInvalid()) {
       VInt vi = getNonEmptyIndex();
       for (n = 0; n < vi.size(); n++) {
         i = best.gx(n);
         j = best.gy(n);
         if (i != InvalidValue) {
+          s1[best.n[n]] = std::to_string(n + 1);
           for (auto &xy : ALL_FIGURES[vi[best.n[n]]].xy) {
             x = xy[0];
             y = xy[1];
@@ -523,7 +533,7 @@ public:
             }
             cr->restore();
             std::sort(n.begin(), n.end());
-            std::string s;
+            s = "";
             for (auto &a : n) {
               if (a != BG_COLOR) {
                 s += std::to_string(a + 1);
@@ -537,6 +547,13 @@ public:
       if (!best.isPrizeInvalid()) {
         draw_hatched_square(cr, best.prize_x, best.prize_y);
       }
+    }
+
+    i = 0;
+    for (n = 0; n < 3; n++) {
+      s = best.isInvalid() ? ""
+                           : (gfigureIndex[n] == ALL_COUNT ? "X" : s1[i++]);
+      m_label[n].set_label(s);
     }
 
     if (!usePixbuf) {
@@ -763,6 +780,7 @@ public:
   std::string m_out[NT];
   // search prize need if only bad moves found
   Gtk::Button m_buttonSave, m_buttonTimer, m_buttonOptions, m_buttonSearchPrize;
+  Gtk::Label m_label[3];
   Gtk::DrawingArea m_drawing_area;
   std::string m_prev, m_prevfields;
   std::vector<FigureStatistics> m_figureStatistics;

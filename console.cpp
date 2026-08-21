@@ -10,8 +10,9 @@ int main() {
   int i=5;
 
   pr(toString(1234,'_',2));
-  
+
   pr(toString(-1234,'_',2));
+  pri;
   init();
   parseInitialString();
   for (auto a : gfigureIndex) {

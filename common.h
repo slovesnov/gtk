@@ -120,8 +120,10 @@ void print_line_helper(std::source_location loc, Args &&...args) {
 
   (print_with_space(std::forward<Args>(args)), ...);
 
-  std::cout << (sizeof...(Args) ? " " : "") << loc.file_name() << ":"
-            << loc.line() << "\n";
+  if constexpr (sizeof...(Args) > 0) {
+    std::cout << " ";
+  }
+  std::cout << loc.file_name() << ":" << loc.line() << "\n";
 }
 
 // pr("123",i,v);
@@ -465,10 +467,12 @@ struct Info {
     auto t = get();
     auto m = p.get();
     for (int a : {SCORE, ESTIMATE}) {
-      if (t[a] + m[a] >= 1 << BITS[a]) {
+      if (t[a] + m[a] < 1 << BITS[a]) {
+        t[a] += m[a];
+      } else {
         pr1("error {} {} {} {}", a, t[a], m[a], 1 << BITS[a]);
+        t[a] = (1 << BITS[a]) - 1;
       }
-      t[a] += m[a];
     }
     return countEstimate(t);
   }

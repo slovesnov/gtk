@@ -6,8 +6,8 @@ time g++ -std=c++23 gtk.cpp app.res `pkg-config gtkmm-4.0 --cflags --libs` -lgdi
 
 ------- CONSOLE MODE  -------
 clear && g++ -std=c++23 console.cpp -o console.exe && ./console.exe
-g++ console.cpp -o console.exe && ./console.exe
-time g++ console.cpp -o console.exe && ./console.exe
+g++ -std=c++23 console.cpp -o console.exe && ./console.exe
+time g++ -std=c++23 console.cpp -o console.exe && ./console.exe
 
 
 //-lgdi32 not need

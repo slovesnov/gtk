@@ -23,7 +23,7 @@
 
 bool timer = 1;
 const bool LOG = 1;
-const int TIMER_MILLISECONDS = 1000; // 500
+const int TIMER_MILLISECONDS = 500; // 500
 const int SAVE_TIMER_MILLISECONDS = 3000;
 const std::string LOG_FILE = "log.txt";
 const std::string SCREEN_DIR = "png";
@@ -168,9 +168,6 @@ public:
         s += "\n";
       }
       s += std::format("{} {}", i, fd(i));
-      // if (i == ALL_COUNT) {
-      //   s += std::format(" start {}", START_HIGHLIGHT_N);
-      // }
     }
     label->set_text(s);
     label->set_wrap(true);
@@ -927,16 +924,16 @@ std::string get_screenshot_winapi() {
   if (x + STEP * (N - 1) >= width || y + STEP * (N - 1) >= height)
     return std::format("bounds error {}", __LINE__);
 
-  hs = "";
+  // hs = "";
   l = 0;
   for (j = 0; j < N; j++) {
     for (i = 0; i < N; i++) {
       uint32_t k = getPixelColor(x + i * STEP, y + j * STEP);
       field[j][i] = b = k != EMPTY_COLOR[j];
-      if (b && !std::ranges::contains(POSSIBLE_COLOR, k)) {
-        hs += std::format("{}{} 0x{:x}\n", i, j, k);
-        l++;
-      }
+      // if (b && !std::ranges::contains(POSSIBLE_COLOR, k)) {
+      //   hs += std::format("{}{} 0x{:x}\n", i, j, k);
+      //   l++;
+      // }
     }
   }
   if (l > 7) {

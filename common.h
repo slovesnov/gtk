@@ -93,7 +93,7 @@ bool startFromEmptyField = 0;
 VInt gfigureIndex;
 bool field[N][N];
 std::set<uint32_t> set2;
-std::string hs;
+//std::string hs;
 #ifdef USE_SKIPC
 int skipc2;
 #endif
@@ -323,34 +323,22 @@ bool possibleRectange(const bool field[N][N], int w, int h) {
   return false;
 }
 
-bool possibleSquare3(const bool field[N][N]) {
-  return possibleRectange(field, 3, 3);
-}
-
-bool possibleV(const bool field[N][N], int n) {
-  return possibleRectange(field, 1, n);
-}
-
-bool possibleH(const bool field[N][N], int n) {
-  return possibleRectange(field, n, 1);
-}
-
 int countPossible(const bool field[N][N]) {
   int i, j;
-  bool square3 = possibleSquare3(field), h5, v5;
+  bool square3 = possibleRectange(field, 3, 3), h5, v5;
   if (square3) {
-    h5 = possibleV(field, 5);
-    v5 = possibleH(field, 5);
-    return ALL_COUNT - 2 + (h5 ? 1 : possibleH(field, 4) - 1) +
-           (v5 ? 1 : possibleV(field, 4) - 1);
+    h5 = possibleRectange(field, 5, 1);
+    v5 = possibleRectange(field, 1, 5);
+    return ALL_COUNT - 2 + (h5 ? 1 : possibleRectange(field, 4, 1) - 1) +
+           (v5 ? 1 : possibleRectange(field, 1, 4) - 1);
   } else {
-    i = 0;
-    // j=0 square3,j=ALL_COUNT-1 dot
+    i = 1;
+    // j=0 square3, j=ALL_COUNT-1 dot
     for (j = 1; j < ALL_COUNT - 1; j++)
       if (hasPossibleMoves(ALL_FIGURES[j], field))
         i++;
 
-    return i + 1;
+    return i;
   }
 }
 
@@ -1032,50 +1020,44 @@ void from_string(const std::string &s, VVInt &f) {
 void init() {
   VString vs;
   int x, y, i, j;
-  std::string s, key;
+  std::string s, k;
   std::set<std::string> set;
+  VVInt a, f;
 
-  /*first square3 & lines after, dot is last*/
-
+  /*first square3, dot is last*/
   // square
   for (i = 3; i >= 2; i--) {
-    key = s = std::string(i, '1');
+    k = s = std::string(i, '1');
     for (j = 0; j < i - 1; j++) {
-      key += ' ' + s;
+      k += ' ' + s;
     }
-    vs.push_back(key);
-
-    if (i == 3) {
-      // line
-      for (j = 5; j >= 2; j--) {
-        key = std::string(j, '1');
-        vs.push_back(key);
-      }
-    }
+    vs.push_back(k);
   }
 
   // ugly
-  for (const auto &[key, value] : MAP) {
-    vs.push_back(key);
+  for (const auto &[k, value] : MAP) {
+    vs.push_back(k);
   }
 
-  // dot
-  vs.push_back("1");
+  // line and dot, dot should be last
+  for (i = 5; i > 0; i--) {
+    k = std::string(i, '1');
+    vs.push_back(k);
+  }
 
-  int k = 0;
-  VVInt a;
-  for (const auto &key : vs) {
-    from_string(key, a);
+  j = 0;
+  for (const auto &k : vs) {
+    from_string(k, a);
     set.clear();
     auto r = rotate(a);
     for (x = 0; x < 2; x++) {
       for (y = 0; y < 2; y++) {
         for (i = 0; i < 2; i++) {
-          VVInt f = invertFigure(i ? r : a, x, y);
+          f = invertFigure(i ? r : a, x, y);
           s = to_string(f);
           if (!set.contains(s)) {
             set.insert(s);
-            ALL_FIGURES[k++].set(s, key, f);
+            ALL_FIGURES[j++].set(s, k, f);
           }
         }
       }

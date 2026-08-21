@@ -93,12 +93,13 @@ bool startFromEmptyField = 0;
 VInt gfigureIndex;
 bool field[N][N];
 std::set<uint32_t> set2;
-//std::string hs;
+// std::string hs;
 #ifdef USE_SKIPC
 int skipc2;
 #endif
 
-#define PRINT(fmt, ...)                                                        \
+// pr1("error {} {}", v[i], v[i + 1]);
+#define pr1(fmt, ...)                                                          \
   std::cout << std::format(fmt " {}:{}\n" __VA_OPT__(, )                       \
                                __VA_ARGS__ __VA_OPT__(, )                      \
                                    std::source_location::current()             \
@@ -119,17 +120,15 @@ void print_line_helper(std::source_location loc, Args &&...args) {
 
   (print_with_space(std::forward<Args>(args)), ...);
 
-  std::cout << " " << loc.file_name() << ":" << loc.line() << "\n";
+  std::cout << (sizeof...(Args) ? " " : "") << loc.file_name() << ":"
+            << loc.line() << "\n";
 }
 
-#define PRINT_LINE1(...)                                                       \
+// pr("123",i,v);
+#define pr(...)                                                                \
   print_line_helper(std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);
 
-// pr("123");
-#define pr PRINT_LINE1
-// pr1("error {} {}", v[i], v[i + 1]);
-#define pr1 PRINT
-#define pri PRINT_LINE1("")
+#define pri pr()
 
 bool same(const bool f1[N][N], const bool f2[N][N]) {
   return std::equal(&f1[0][0], &f1[0][0] + N * N, &f2[0][0]);
@@ -415,7 +414,7 @@ struct Info {
   }();
 
   Info() {}
-  Info(int _x, int _y, int _estimate, std::pair<int, int> linesScore, bool _end,
+  Info(int _x, int _y, int estimate, std::pair<int, int> linesScore, bool _end,
        bool _field[N][N]) {
     x = _x;
     y = _y;
@@ -427,9 +426,9 @@ struct Info {
 
     Params v = {
 #ifdef FIELDS_FIRST
-        possibleAfter, N * N - countFill(field), linesScore.second, _estimate
+        possibleAfter, N * N - countFill(field), linesScore.second, estimate
 #else
-        possibleAfter, linesScore.second, N * N - countFill(field), _estimate
+        possibleAfter, linesScore.second, N * N - countFill(field), estimate
 #endif
 
     };

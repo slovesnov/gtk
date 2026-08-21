@@ -189,6 +189,9 @@ public:
     m_buttonClearLog.set_label("clear log");
     m_btn_ok.set_label("ok");
 
+    Gtk::Box m_vbox{Gtk::Orientation::VERTICAL};
+    Gtk::Box m_hbox_buttons{Gtk::Orientation::HORIZONTAL};
+
     m_vbox.set_margin(12);
     m_vbox.set_spacing(10);
 
@@ -205,7 +208,7 @@ public:
 
     m_frame = Gtk::make_managed<Gtk::Frame>();
     m_frame_checkbox = Gtk::make_managed<Gtk::CheckButton>("set / clear all");
-    m_frame_checkbox->set_active(show_statistics[1]|| show_statistics[2] );
+    m_frame_checkbox->set_active(show_statistics[1] || show_statistics[2]);
     m_frame->set_label_widget(*m_frame_checkbox);
     auto *frame_content_box =
         Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL);
@@ -233,7 +236,8 @@ public:
       i++;
     }
 
-    m_main_vbox.set_margin(12);
+    Gtk::Box m_main_vbox{Gtk::Orientation::VERTICAL};
+    m_main_vbox.set_margin(2);
     m_main_vbox.append(*m_frame);
 
     m_vbox.append(m_main_vbox);
@@ -280,8 +284,6 @@ public:
 
 private:
   static const int checks = std::size(show_statistics);
-  Gtk::Box m_vbox{Gtk::Orientation::VERTICAL};
-  Gtk::Box m_hbox_buttons{Gtk::Orientation::HORIZONTAL};
   Gtk::CheckButton m_check[checks];
 
   Gtk::SpinButton m_spin_button;
@@ -290,7 +292,6 @@ private:
   Gtk::Label m_label;
   Gtk::Button m_btn_ok, m_buttonClearLog;
 
-  Gtk::Box m_main_vbox{Gtk::Orientation::VERTICAL};
   Gtk::Frame *m_frame;
   Gtk::CheckButton *m_frame_checkbox;
 

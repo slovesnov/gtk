@@ -1,17 +1,18 @@
-#include "common.h"
 
 /*
 clear && g++ -std=c++23 console.cpp -o console.exe && ./console.exe
 g++ -std=c++23 console.cpp -o console.exe && ./console.exe
 */
+#include "common.h"
+
 
 int main() {
   int i=5;
 
+  pr(toString(1234,'_',2));
+  
+  pr(toString(-1234,'_',2));
   init();
-pri;
-pr(1,2,3,i)
-pr1("i={}@",i)
   parseInitialString();
   for (auto a : gfigureIndex) {
     // pr(ALL_FIGURES[a].name)

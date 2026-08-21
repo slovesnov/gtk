@@ -1073,30 +1073,11 @@ void init() {
 #endif
 }
 
-std::string toString(int t, char separator = ' ', int digits = 3) {
-  // std::fixed to prevents scientific notation t=1234567.890123 b=1.23457e
-  // +06
-  std::stringstream c;
-  c << std::fixed << t;
-  std::string s, e, b = c.str();
-  std::string::size_type p, p1;
-  p = b.find('.');
-  if (p != std::string::npos) {
-    for (p1 = b.length() - 1; p1 > p && b[p1] == '0'; p1--)
-      ;            //"3.875000"->"3.875"
-    if (p != p1) { //"1.000" -> "1"
-      e = b.substr(p, p1 - p + 1);
-    }
-    b = b.substr(0, p);
+std::string toString(int number, char separator = ' ', int digits = 3) {
+  std::string s = std::to_string(number);
+  int start_idx = (number < 0) ? 1 : 0;
+  for (int i = s.length() - digits; i > start_idx; i -= digits) {
+    s.insert(i, 1, separator);
   }
-  bool negative = std::is_signed<int>::value && t < 0;
-  unsigned i = b.length() - 1;
-  for (char a : b) {
-    s += a;
-    if (i % digits == 0 && i != 0 && (!negative || i != b.length() - 1)) {
-      s += separator;
-    }
-    i--;
-  }
-  return s + e;
+  return s;
 }

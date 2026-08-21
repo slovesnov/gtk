@@ -301,7 +301,7 @@ private:
 class Window : public TMWindow {
 public:
   Window()
-      : TMWindow("blocks game"), m_buttonSave(SAVE_PNG), m_buttonTimer(),
+      : TMWindow("blocks game"), m_buttonSave(SAVE_PNG),
         m_buttonSearchPrize("search prize"), m_buttonOptions("options") {
     int i;
 
@@ -330,17 +330,22 @@ public:
       m_text_view[i].set_wrap_mode(Gtk::WrapMode::WORD);
     }
 
-    auto box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
-    // box->append(m_buttonSave);
-    box->append(m_buttonTimer);
+    Gtk::Box *box, *box1;
+
+    box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 2);
+
+    box1 = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 10);
+    box1->append(m_buttonTimer);
+    box1->append(m_buttonOptions);
+
     // need if only bad configurations available
+    box->append(*box1);
     box->append(m_buttonSearchPrize);
-    box->append(m_buttonOptions);
     box->append(m_text_view[2]);
     box->append(m_drawing_area);
     box->append(m_scrolled_window[1]);
 
-    auto box1 = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL);
+    box1 = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL);
     box1->append(m_scrolled_window[0]);
     box1->append(*box);
     set_child(*box1);
@@ -356,13 +361,13 @@ public:
 
     m_buttonTimer.signal_clicked().connect([this]() {
       timer = !timer;
-      setButtonTimerText();
+      updateButtonTimer();
     });
 
     m_buttonSearchPrize.signal_clicked().connect([this]() {
       if (timer) {
         timer = 0;
-        setButtonTimerText();
+        updateButtonTimer();
       }
       int i = 1;
       m_out[i] = getPrizesString();
@@ -374,7 +379,7 @@ public:
       dialog->set_visible(true);
     });
 
-    setButtonTimerText();
+    updateButtonTimer();
 
     init();
     newGame();
@@ -459,8 +464,6 @@ public:
 
     if (usePixbuf) {
       auto pixbuf = createPixbuf(1);
-      int dest_width = Q * N;
-      int dest_height = Q * N;
       Glib::RefPtr<Gdk::Pixbuf> resized_pixbuf =
           pixbuf->scale_simple(Q * N, Q * N, Gdk::InterpType::BILINEAR);
 
@@ -580,8 +583,9 @@ public:
     layout->show_in_cairo_context(cr);
   }
 
-  void setButtonTimerText() {
-    m_buttonTimer.set_label((timer ? "stop" : "start") + std::string(" timer"));
+  void updateButtonTimer() {
+    m_buttonTimer.set_icon_name(
+        std::format("media-playback-{}", timer ? "stop" : "start"));
   }
 
   void updateSaveButton(std::string s) {
@@ -609,7 +613,6 @@ public:
 
   bool tick() {
     int i;
-    bool b;
     if (timer) {
       gets();
       for (i = 0; i < NT; i++) {
@@ -638,7 +641,6 @@ public:
   }
 
   void gets() {
-    int i, j;
     bool log = 0;
     std::string s1, name, cd, mincode, s, se;
     for (auto &a : m_out) {
@@ -792,7 +794,7 @@ int main(int argc, char *argv[]) {
 }
 
 PointInfo getBase(int sx, int width, int sy, int height, int o) {
-  int i, j, x, y, k;
+  int x, y;
   for (y = 0; y < height; y++) {
     auto p = gp + (y + sy) * gtotalWidth + sx;
     for (x = 0; x < width; x++, p++) {

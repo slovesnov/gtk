@@ -59,7 +59,8 @@ static_assert(NF >= -1 && NF < int(std::size(fixed_field)));
 using VInt = std::vector<int>;
 using VVInt = std::vector<VInt>;
 using VString = std::vector<std::string>;
-using VPIntInt = std::vector<std::pair<int, int>>;
+using PIntInt = std::pair<int, int>;
+using VPIntInt = std::vector<PIntInt>;
 
 const int N = 8;
 const int NT = 3;
@@ -416,7 +417,7 @@ struct Info {
   }();
 
   Info() {}
-  Info(int _x, int _y, int estimate, std::pair<int, int> linesScore, bool _end,
+  Info(int _x, int _y, int estimate, PIntInt linesScore, bool _end,
        bool _field[N][N]) {
     x = _x;
     y = _y;
@@ -548,9 +549,9 @@ struct Prev {
   Info best;
 } previous[4];
 
-std::pair<int, int> resetGetLinesScore(int i, int j, const Figure &f,
-                                       bool fill[N][N], bool after[N][N]) {
-  int l = 0, x, y, score = 0;
+PIntInt resetGetLinesScore(int i, int j, const Figure &f, bool fill[N][N],
+                           bool after[N][N]) {
+  int l = 0, x, y;
   copy(fill, after);
 
   for (auto &_x : f.xfill) {
@@ -605,7 +606,7 @@ std::string to_string(const VVInt &a) {
 
 // returns false if move impossible
 MakeMoveResult make_move(int i, int j, const Figure &f, bool field[N][N]) {
-  int x, y, l;
+  int x, y;
   bool fill[N][N], after[N][N];
 
   copy(field, fill);
@@ -652,7 +653,7 @@ void from_string(const std::string &st, bool field[N][N]) {
     exit(1);
   }
 
-  for (i = 1; i < matches.size(); i++) {
+  for (i = 1; i < int(matches.size()); i++) {
     s = matches[i];
     if (s.empty()) {
       break;
@@ -664,7 +665,7 @@ void from_string(const std::string &st, bool field[N][N]) {
     gfigureIndex[i] = findFigureIndex(v[i]);
   }
 
-  for (; i < v.size(); i += 2) {
+  for (; i < int(v.size()); i += 2) {
     b = make_move(v[i][0] - '0', v[i][1] - '0',
                   ALL_FIGURES[gfigureIndex[v[i + 1][0] - '1']], field)
             .valid;
@@ -694,9 +695,8 @@ std::string gameTimeString() {
 VInfo possibleMoves(const Figure &f, const VInt &recent,
                     const bool field[N][N]) {
   int i, j, e, x, y;
-  bool fill[N][N], after[N][N];
-  std::pair<int, int> p;
-  bool end;
+  bool fill[N][N], after[N][N], end;
+  PIntInt p;
   VInfo vi;
   for (j = 0; j <= N - f.height; j++) {
     for (i = 0; i <= N - f.width; i++) {
@@ -742,7 +742,6 @@ Info estimate(const VInt &vf, const bool field[N][N], const VInt &figureIndex,
               const int code, const int lines) {
   Info r, e;
   VInt v2;
-  uint32_t est;
   int j, k;
   r.setInvalid();
   r.setPrizeInvalid();
@@ -956,7 +955,7 @@ std::string bestString() {
                        std::to_string(best.get(SCORE)),
                        std::to_string(best.totalLines())};
     std::string v1[] = {"after", "after", "now", "now", "score", "lines"};
-    for (i = 0; i < std::size(v); i++) {
+    for (i = 0; i < int(std::size(v)); i++) {
       s += v1[i] + " " + v[i] + "\n";
     }
   }

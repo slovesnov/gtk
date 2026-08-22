@@ -1,5 +1,10 @@
 #include "common.h"
 
+/*
+clear && g++ -std=c++23 console.cpp -o console.exe && ./console.exe
+g++ -std=c++23 console.cpp -o console.exe && ./console.exe
+*/
+
 int main() {
   init();
   parseInitialString();
@@ -23,4 +28,7 @@ int main() {
   pr1("{}",gfigureIndex);
   pr(same(field,original));
   //pr(to_string(field));
+
+  int i=3;
+  prv(1,"xyz",i)
 }

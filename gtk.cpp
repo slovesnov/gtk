@@ -23,9 +23,11 @@
 
 bool timer = 1;
 const bool LOG = 1;
-const int TIMER_MILLISECONDS = 500; // 500
-const int SAVE_TIMER_MILLISECONDS = 3000;
+const int START_TIMER = 500; // 500
+const int SAVE_TIMER = 3000;
 const std::string LOG_FILE = "log.txt";
+const std::string LOG_FILE_STAT = "log_stat.txt";
+const std::string CONFIG_FILE = "app.cfg";
 const std::string SCREEN_DIR = "png";
 const int START_HIGHLIGHT_N = 33;
 int highlight_n = START_HIGHLIGHT_N;
@@ -33,7 +35,9 @@ int highlight_n = START_HIGHLIGHT_N;
 const int POSSIBLE = 0;
 const int FILL = 1;
 const int FIGURE = 2;
-bool show_statistics[] = {1, 0, 0};
+const int SHOW_STATISTICS_SIZE = 3;
+const std::array<bool, SHOW_STATISTICS_SIZE> START_SHOW_STATISTICS = {1, 0, 0};
+std::array<bool, SHOW_STATISTICS_SIZE> show_statistics = START_SHOW_STATISTICS;
 
 const int DX = 763 - 852;
 const int DY = 347 - 202;
@@ -82,6 +86,7 @@ std::string get_screenshot_winapi();
 std::string toABGR(uint32_t c, bool onlyRGB = true);
 std::string code(const Figure &a);
 std::string fullPath(std::string name) { return (app_dir / name).string(); }
+std::string statisticsString(const std::array<bool, SHOW_STATISTICS_SIZE> show);
 
 struct PointInfo {
   int x;
@@ -122,188 +127,20 @@ struct FigureStatistics {
   }
 };
 
-class TMWindow : public Gtk::Window {
-public:
-  TMWindow(std::string title) {
-    m_title = title;
-    set_title(m_title);
-  }
-  std::string m_title;
-  HWND m_hwnd;
+std::vector<FigureStatistics> figureStatistics;
 
-  void setTopMost(bool topmost) {
-    if (topmost) {
-      SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+class Window;
+Window *mainWnd;
 
-    } else {
-      SetWindowPos(m_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
-                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER);
-    }
-  }
-
-  void on_show() override {
-    Gtk::Window::on_show();
-
-    m_hwnd = FindWindowA(NULL, m_title.c_str());
-    // make_always_on_top
-    setTopMost(1);
-  }
-};
-
-class OptionsDialog : public Gtk::Window {
-public:
-  OptionsDialog(TMWindow &parent) {
-    int i;
-    std::string s;
-    parent.setTopMost(false);
-    set_title("options");
-    set_transient_for(parent);
-    this->parent = &parent;
-    set_modal(true);
-    set_default_size(280, 450);
-
-    Gtk::Label *label = Gtk::make_managed<Gtk::Label>();
-    for (i = ALL_COUNT; i > 0; i--) {
-      if (i) {
-        s += "\n";
-      }
-      s += std::format("{} {}", i, fd(i));
-    }
-    label->set_text(s);
-    label->set_wrap(true);
-    label->set_halign(Gtk::Align::START);
-
-    Gtk::ScrolledWindow *m_scrolled_window =
-        Gtk::make_managed<Gtk::ScrolledWindow>();
-
-    m_scrolled_window->set_policy(Gtk::PolicyType::NEVER,
-                                  Gtk::PolicyType::AUTOMATIC);
-    m_scrolled_window->set_hexpand(true);
-    m_scrolled_window->set_propagate_natural_height(true);
-    m_scrolled_window->set_child(*label);
-
-    m_adjustment = Gtk::Adjustment::create(highlight_n, 1, ALL_COUNT, 1, 10, 0);
-    m_spin_button.set_adjustment(m_adjustment);
-    m_spin_button.set_numeric(true);
-
-    m_buttonClearLog.set_label("clear log");
-    m_btn_ok.set_label("ok");
-
-    Gtk::Box m_vbox{Gtk::Orientation::VERTICAL};
-    Gtk::Box m_hbox_buttons{Gtk::Orientation::HORIZONTAL};
-
-    m_vbox.set_margin(12);
-    m_vbox.set_spacing(10);
-
-    m_hbox_buttons.set_spacing(3);
-    m_hbox_buttons.set_halign(Gtk::Align::END);
-    m_hbox_buttons.append(m_buttonClearLog);
-    m_hbox_buttons.append(m_btn_ok);
-
-    auto box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 2);
-    box->append(m_spin_button);
-    box->append(m_label);
-
-    m_vbox.append(*box);
-
-    m_frame = Gtk::make_managed<Gtk::Frame>();
-    m_frame_checkbox = Gtk::make_managed<Gtk::CheckButton>("set / clear all");
-    m_frame_checkbox->set_active(show_statistics[1] || show_statistics[2]);
-    m_frame->set_label_widget(*m_frame_checkbox);
-    auto *frame_content_box =
-        Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL);
-    frame_content_box->set_margin(12);
-    frame_content_box->set_spacing(6);
-    m_frame->set_child(*frame_content_box);
-
-    m_frame_checkbox->signal_toggled().connect([frame_content_box, this]() {
-      bool is_active = m_frame_checkbox->get_active();
-      for (int i = 1; i < 3; i++) {
-        m_check[i].set_active(is_active);
-      }
-    });
-
-    const std::string v[] = {"possible", "fill", "figure"};
-    i = 0;
-    for (auto &a : m_check) {
-      a.set_label("show " + v[i] + " statistics");
-      a.set_active(show_statistics[i]);
-      if (i) {
-        frame_content_box->append(a);
-      } else {
-        m_vbox.append(a);
-      }
-      i++;
-    }
-
-    Gtk::Box m_main_vbox{Gtk::Orientation::VERTICAL};
-    m_main_vbox.set_margin(2);
-    m_main_vbox.append(*m_frame);
-
-    m_vbox.append(m_main_vbox);
-
-    m_vbox.append(m_hbox_buttons);
-
-    box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 2);
-    box->append(m_vbox);
-    box->append(*m_scrolled_window);
-
-    set_child(*box);
-    update_label();
-
-    m_buttonClearLog.signal_clicked().connect(
-        [this]() { std::filesystem::remove(fullPath(LOG_FILE)); });
-
-    m_btn_ok.signal_clicked().connect([this]() {
-      highlight_n = m_spin_button.get_value();
-      for (int i = 0; i < checks; i++) {
-        show_statistics[i] = m_check[i].get_active();
-      }
-      close();
-    });
-
-    m_spin_button.signal_value_changed().connect([this]() { update_label(); });
-
-    signal_close_request().connect(
-        sigc::mem_fun(*this, &OptionsDialog::on_window_close), false);
-  }
-
-  bool on_window_close() {
-    parent->setTopMost(1);
-    return false;
-  }
-
-  void update_label() {
-    int v = m_spin_button.get_value();
-    m_label.set_text(fd(v));
-  }
-
-  std::string fd(int i) {
-    return std::format("{:.4f}%", successProbability(i) * 100);
-  }
-
-private:
-  static const int checks = std::size(show_statistics);
-  Gtk::CheckButton m_check[checks];
-
-  Gtk::SpinButton m_spin_button;
-  Glib::RefPtr<Gtk::Adjustment> m_adjustment;
-
-  Gtk::Label m_label;
-  Gtk::Button m_btn_ok, m_buttonClearLog;
-
-  Gtk::Frame *m_frame;
-  Gtk::CheckButton *m_frame_checkbox;
-
-  TMWindow *parent;
-};
-
-class Window : public TMWindow {
+class Window : public Gtk::Window {
 public:
   Window()
-      : TMWindow("blocks game"), m_buttonSave(SAVE_PNG),
-        m_buttonSearchPrize("search prize"), m_buttonOptions("options") {
+      : m_buttonSave(SAVE_PNG), m_buttonSearchPrize("search prize"),
+        m_buttonOptions("options") {
     int i;
+    mainWnd = this;
+    m_title = "blocks game";
+    set_title(m_title);
 
     set_resizable(false);
 
@@ -368,25 +205,19 @@ public:
     m_buttonSave.signal_clicked().connect(
         [this]() { updateSaveButton(savePng()); });
 
-    m_buttonTimer.signal_clicked().connect([this]() {
-      timer = !timer;
-      updateButtonTimer();
-    });
+    m_buttonTimer.signal_clicked().connect(
+        [this]() { setUpdateTimer(!timer); });
 
     m_buttonSearchPrize.signal_clicked().connect([this]() {
       if (timer) {
-        timer = 0;
-        updateButtonTimer();
+        setUpdateTimer(0);
       }
       int i = 1;
       m_out[i] = getPrizesString();
       m_text_view[i].get_buffer()->set_text(m_out[i]);
     });
 
-    m_buttonOptions.signal_clicked().connect([this]() {
-      auto dialog = Gtk::make_managed<OptionsDialog>(*this);
-      dialog->set_visible(true);
-    });
+    m_buttonOptions.signal_clicked().connect([this]() { showOptions(); });
 
     updateButtonTimer();
 
@@ -404,8 +235,80 @@ public:
     if (LOG)
       std::filesystem::create_directories("./" + SCREEN_DIR);
 
-    Glib::signal_timeout().connect(sigc::mem_fun(*this, &Window::tick),
-                                   TIMER_MILLISECONDS);
+    loadConfig();
+
+    // after loadConfig()
+    start_timer();
+
+    signal_close_request().connect(
+        [this]() {
+          timer = 0; // todo
+          addLog(0);
+          saveConfig();
+          return false;
+        },
+        false);
+
+    property_suspended().signal_changed().connect(
+        [this]() { on_window_suspended_changed(); });
+  }
+
+  void showOptions();
+
+  void change_timer_interval(int new_ms) {
+    m_timer_interval = new_ms;
+    m_need_restart = true;
+  }
+
+  void on_window_suspended_changed() {
+    if (property_suspended().get_value()) {
+      setUpdateTimer(0);
+    } else {
+    }
+  }
+
+  void loadConfig() {
+    std::ifstream file(fullPath(CONFIG_FILE));
+    if (!file.is_open()) {
+      return;
+    }
+    int i, j[5];
+    std::string s;
+    for (auto &a : j) {
+      file >> s >> a;
+    }
+
+    i = 0;
+    highlight_n = j[i++];
+    m_timer_interval = j[i++];
+    for (auto &a : show_statistics) {
+      a = j[i++];
+    }
+  }
+
+  void saveConfig() {
+    std::ofstream file(fullPath(CONFIG_FILE), std::ios::out | std::ios::trunc);
+    file << std::format("highlight {}\ntimer {}\n", highlight_n,
+                        m_timer_interval);
+    for (auto &a : show_statistics) {
+      file << "show " << a << "\n";
+    }
+  }
+
+  void addLog(int o) {
+    std::ofstream file(fullPath(o ? LOG_FILE : LOG_FILE_STAT), std::ios::app);
+    std::string m(5, '-');
+    file << "\n" << m << " " << dateTimeString() << " " << m << "\n";
+
+    if (o) {
+      file << to_string(field) + nonEmptyFiguresString() << "\n";
+      for (auto &a : m_out) {
+        file << a;
+      }
+    } else {
+      // bool b[] = {1, 1, 1};
+      file << statisticsString({1, 1, 1}) << "\n";
+    }
   }
 
   void highlightText(int n) {
@@ -424,7 +327,7 @@ public:
     best.setInvalid();
     fillStatistics.clear();
     possibleStatistics.clear();
-    m_figureStatistics.clear();
+    figureStatistics.clear();
   }
 
   void setColor(const Cairo::RefPtr<Cairo::Context> &cr, int i) {
@@ -600,6 +503,11 @@ public:
     layout->show_in_cairo_context(cr);
   }
 
+  void setUpdateTimer(bool t) {
+    timer = t;
+    updateButtonTimer();
+  }
+
   void updateButtonTimer() {
     m_buttonTimer.set_icon_name(
         std::format("media-playback-{}", timer ? "stop" : "start"));
@@ -612,25 +520,24 @@ public:
           m_buttonSave.set_label(SAVE_PNG);
           return false;
         },
-        SAVE_TIMER_MILLISECONDS);
+        SAVE_TIMER);
   }
 
-  void addLog() {
-    std::ofstream file(fullPath(LOG_FILE), std::ios::app);
-    std::string m(5, '-');
-    file << "\n"
-         << m << " " << dateTimeString() << " " << m << "\n"
-         << to_string(field) + nonEmptyFiguresString() << "\n";
-
-    for (auto &a : m_out) {
-      file << a;
-    }
-    file.close();
+  void start_timer() {
+    Glib::signal_timeout().connect([this]() { return tick(); },
+                                   m_timer_interval);
   }
 
   bool tick() {
     int i;
+    if (m_need_restart) {
+      m_need_restart = false;
+      start_timer();
+      return false;
+    }
+
     if (timer) {
+      // pri
       gets();
       for (i = 0; i < NT; i++) {
         m_text_view[i].get_buffer()->set_text(m_out[i]);
@@ -718,10 +625,10 @@ public:
           name = fi.name;
 
           auto it =
-              std::find_if(m_figureStatistics.begin(), m_figureStatistics.end(),
+              std::find_if(figureStatistics.begin(), figureStatistics.end(),
                            [&mincode](auto x) { return x.mincode == mincode; });
-          if (it == m_figureStatistics.end()) {
-            m_figureStatistics.push_back(FigureStatistics(name, mincode, cd));
+          if (it == figureStatistics.end()) {
+            figureStatistics.push_back(FigureStatistics(name, mincode, cd));
           } else {
             auto it1 = std::find_if(it->v.begin(), it->v.end(),
                                     [&cd](auto x) { return x.first == cd; });
@@ -734,32 +641,7 @@ public:
       }
     }
 
-    int total = 0, max = 0, squares = 0;
-    for (auto &e : m_figureStatistics) {
-      e.count();
-      total += e.total;
-      squares += e.squares;
-      if (e.total > max) {
-        max = e.total;
-      }
-    }
-
-    if (show_statistics[FIGURE]) {
-      std::sort(m_figureStatistics.begin(), m_figureStatistics.end());
-
-      for (const auto &e : m_figureStatistics)
-        s += e.to_string(total, max);
-
-      VString vs = {
-          std::format("figures {}", total),
-          std::format("squares {}", toString(squares, ',')),
-      };
-      s += join(vs, '\n', 1);
-    }
-    s += (show_statistics[POSSIBLE] ? possibleStatString() : "") +
-         (show_statistics[FILL] ? fillStatString() : "")
-
-         + se;
+    s += statisticsString(show_statistics) + se;
     m_out[0] = s;
     m_out[1] = bestString();
     m_out[2] = std::format(
@@ -769,12 +651,29 @@ public:
         possibleString(possible, 2));
 
     if (!DEBUG_MODE && LOG && log) {
-      addLog();
+      addLog(1);
       // savePng();
     }
   }
 
-public:
+  void on_show() override {
+    Gtk::Window::on_show();
+
+    m_hwnd = FindWindowA(NULL, m_title.c_str());
+    // make_always_on_top
+    setTopMost(1);
+  }
+
+  void setTopMost(bool topmost) {
+    if (topmost) {
+      SetWindowPos(m_hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
+    } else {
+      SetWindowPos(m_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER);
+    }
+  }
+
   Gtk::ScrolledWindow m_scrolled_window[NT];
   Gtk::TextView m_text_view[NT];
   std::string m_out[NT];
@@ -783,9 +682,194 @@ public:
   Gtk::Label m_label[3];
   Gtk::DrawingArea m_drawing_area;
   std::string m_prev, m_prevfields;
-  std::vector<FigureStatistics> m_figureStatistics;
   Glib::RefPtr<Gtk::TextTag> m_highlight_tag[2];
+  int m_timer_interval = START_TIMER;
+  bool m_need_restart = false;
+  std::string m_title;
+  HWND m_hwnd;
 };
+
+class OptionsDialog : public Gtk::Window {
+public:
+  OptionsDialog() {
+    int i;
+    std::string s;
+    mainWnd->setTopMost(false);
+    set_title("options");
+    set_transient_for(*mainWnd);
+    set_modal(true);
+    set_default_size(320, 450);
+
+    Gtk::Label *label = Gtk::make_managed<Gtk::Label>();
+    for (i = ALL_COUNT; i > 0; i--) {
+      if (i) {
+        s += "\n";
+      }
+      s += std::format("{} {}", i, fd(i));
+    }
+    label->set_text(s);
+    label->set_wrap(true);
+    label->set_halign(Gtk::Align::START);
+
+    Gtk::ScrolledWindow *m_scrolled_window =
+        Gtk::make_managed<Gtk::ScrolledWindow>();
+
+    m_scrolled_window->set_policy(Gtk::PolicyType::NEVER,
+                                  Gtk::PolicyType::AUTOMATIC);
+    m_scrolled_window->set_hexpand(true);
+    m_scrolled_window->set_propagate_natural_height(true);
+    m_scrolled_window->set_child(*label);
+
+    //  Glib::RefPtr<Gtk::Adjustment> m_adjustment;
+
+    i = 0;
+    for (auto &a : m_spin_button) {
+      Glib::RefPtr<Gtk::Adjustment> adjustment;
+      if (i) {
+        adjustment = Gtk::Adjustment::create(mainWnd->m_timer_interval, 500,
+                                             5000, 50, 10 * 50, 0);
+      } else
+        adjustment =
+            Gtk::Adjustment::create(highlight_n, 1, ALL_COUNT, 1, 10, 0);
+      a.set_adjustment(adjustment);
+      a.set_numeric(true);
+      i++;
+    }
+
+    Gtk::Box m_vbox{Gtk::Orientation::VERTICAL};
+    Gtk::Box m_hbox_buttons{Gtk::Orientation::HORIZONTAL};
+
+    m_vbox.set_margin(12);
+    m_vbox.set_spacing(10);
+
+    m_hbox_buttons.set_spacing(3);
+    m_hbox_buttons.set_halign(Gtk::Align::END);
+
+    const std::string t[] = {"reset", "clear log", "ok"};
+    i = 0;
+    for (auto &a : m_button) {
+      a.set_label(t[i]);
+      m_hbox_buttons.append(a);
+      a.signal_clicked().connect([this, i]() {
+        if (i == 0) {
+          m_spin_button[0].set_value(START_HIGHLIGHT_N);
+          m_spin_button[1].set_value(START_TIMER);
+          for (int i = 0; i < SHOW_STATISTICS_SIZE; i++) {
+            m_check[i].set_active(START_SHOW_STATISTICS[i]);
+          }
+          setFrameCheck();
+        } else if (i == 1)
+          std::filesystem::remove(fullPath(LOG_FILE));
+        else {
+          highlight_n = m_spin_button[0].get_value();
+          for (int i = 0; i < SHOW_STATISTICS_SIZE; i++) {
+            show_statistics[i] = m_check[i].get_active();
+          }
+          mainWnd->change_timer_interval(m_spin_button[1].get_value());
+          close();
+        }
+      });
+      i++;
+    }
+
+    Gtk::Box *box;
+    box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 2);
+    box->append(m_spin_button[0]);
+    box->append(m_label);
+    m_vbox.append(*box);
+
+    m_frame = Gtk::make_managed<Gtk::Frame>();
+    m_frame_checkbox = Gtk::make_managed<Gtk::CheckButton>("set / clear all");
+    setFrameCheck();
+    m_frame->set_label_widget(*m_frame_checkbox);
+    auto *frame_content_box =
+        Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL);
+    frame_content_box->set_margin(12);
+    frame_content_box->set_spacing(6);
+    m_frame->set_child(*frame_content_box);
+
+    m_frame_checkbox->signal_toggled().connect([frame_content_box, this]() {
+      bool is_active = m_frame_checkbox->get_active();
+      for (int i = 1; i < 3; i++) {
+        m_check[i].set_active(is_active);
+      }
+    });
+
+    const std::string v[] = {"possible", "fill", "figure"};
+    i = 0;
+    for (auto &a : m_check) {
+      a.set_label("show " + v[i] + " statistics");
+      a.set_active(show_statistics[i]);
+      if (i) {
+        frame_content_box->append(a);
+      } else {
+        m_vbox.append(a);
+      }
+      i++;
+    }
+
+    Gtk::Box m_main_vbox{Gtk::Orientation::VERTICAL};
+    m_main_vbox.set_margin(2);
+    m_main_vbox.append(*m_frame);
+
+    m_vbox.append(m_main_vbox);
+
+    box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 2);
+    auto *my_label = Gtk::make_managed<Gtk::Label>("timer");
+    box->append(*my_label);
+    box->append(m_spin_button[1]);
+    m_vbox.append(*box);
+
+    m_vbox.append(m_hbox_buttons);
+
+    box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 2);
+    box->append(m_vbox);
+    box->append(*m_scrolled_window);
+
+    set_child(*box);
+    update_label();
+
+    m_spin_button[0].signal_value_changed().connect(
+        [this]() { update_label(); });
+
+    signal_close_request().connect(
+        sigc::mem_fun(*this, &OptionsDialog::on_window_close), false);
+  }
+
+  void setFrameCheck() {
+    m_frame_checkbox->set_active(m_check[1].get_active() || m_check[2].get_active());
+  }
+
+  bool on_window_close() {
+    mainWnd->setTopMost(1);
+    return false;
+  }
+
+  void update_label() {
+    int v = m_spin_button[0].get_value();
+    m_label.set_text(fd(v));
+  }
+
+  std::string fd(int i) {
+    return std::format("{:.4f}%", successProbability(i) * 100);
+  }
+
+private:
+  Gtk::CheckButton m_check[SHOW_STATISTICS_SIZE];
+
+  Gtk::SpinButton m_spin_button[2];
+
+  Gtk::Label m_label;
+  Gtk::Button m_button[3];
+
+  Gtk::Frame *m_frame;
+  Gtk::CheckButton *m_frame_checkbox;
+};
+
+void Window::showOptions() {
+  auto dialog = Gtk::make_managed<OptionsDialog>();
+  dialog->set_visible(true);
+}
 
 int main(int argc, char *argv[]) {
   auto app = Gtk::Application::create("com.example.myapp"
@@ -1068,4 +1152,29 @@ std::string fillStatString() {
   }
   s += std::format("total({}) {}\n", v.size(), sum);
   return s;
+}
+
+std::string
+statisticsString(const std::array<bool, SHOW_STATISTICS_SIZE> show) {
+  std::string s;
+  if (show[FIGURE]) {
+    int total = 0, max = 0, squares = 0;
+    for (auto &e : figureStatistics) {
+      e.count();
+      total += e.total;
+      squares += e.squares;
+      if (e.total > max) {
+        max = e.total;
+      }
+    }
+
+    std::sort(figureStatistics.begin(), figureStatistics.end());
+
+    for (const auto &e : figureStatistics)
+      s += e.to_string(total, max);
+
+    s += std::format("figures {}\nsquares {}\n", total, toString(squares, ','));
+  }
+  return s + (show[POSSIBLE] ? possibleStatString() : "") +
+         (show[FILL] ? fillStatString() : "");
 }

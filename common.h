@@ -117,6 +117,17 @@ void print_line_helper(std::source_location loc, Args &&...args) {
   std::cout << loc.file_name() << ":" << loc.line() << "\n";
 }
 
+template<typename H1> std::ostream& show_variables(std::ostream& out, const char* label, H1&& value) {
+  return out << label << "=" << std::forward<H1>(value) << '\n';
+}
+
+template<typename H1, typename ...T> std::ostream& show_variables(std::ostream& out, const char* label, H1&& value, T&&... rest) {
+  const char* pcomma = strchr(label, ',');
+  return show_variables(out.write(label, pcomma - label) << "=" << std::forward<H1>(value) << ',',
+              pcomma + 1,
+              std::forward<T>(rest)...);
+}
+
 // pr("123",i,v);
 #define pr(...)                                                                \
   print_line_helper(std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);
@@ -130,6 +141,14 @@ void print_line_helper(std::source_location loc, Args &&...args) {
                                    std::source_location::current()             \
                                        .file_name(),                           \
                            std::source_location::current().line());
+
+// prv(i,v);
+#define prv(...)                                                               \
+  show_variables(std::cout, #__VA_ARGS__, __VA_ARGS__);                        \
+  std::cout << std::source_location::current().file_name() << ":"              \
+            << std::source_location::current().line() << "\n";
+
+
 
 bool same(const bool f1[N][N], const bool f2[N][N]) {
   return std::equal(&f1[0][0], &f1[0][0] + N * N, &f2[0][0]);
@@ -342,7 +361,7 @@ int countPossible(const bool field[N][N]) {
   }
 }
 
-#define FIELDS_FIRST
+//#define FIELDS_FIRST
 
 #ifdef FIELDS_FIRST
 enum { POSSIBLE_AFTER, FIELDS, SCORE, ESTIMATE };

@@ -4,3 +4,4 @@ app.res
 log*.txt
 macro_gcc.txt
 deploy.txt
+app.cfg

@@ -24,6 +24,10 @@
 bool timer = 1;
 const bool LOG = 1;
 const int START_TIMER = 500; // 500
+const int TIMER_MIN = 300;
+const int TIMER_MAX = 5000;
+const int TIME_STEP = 50;
+
 const int SAVE_TIMER = 3000;
 const std::string LOG_FILE = "log.txt";
 const std::string LOG_FILE_STAT = "log_stat.txt";
@@ -31,6 +35,8 @@ const std::string CONFIG_FILE = "app.cfg";
 const std::string SCREEN_DIR = "png";
 const int START_HIGHLIGHT_N = 33;
 int highlight_n = START_HIGHLIGHT_N;
+// https://htmlcolorcodes.com/colors/shades-of-yellow/
+const std::string HIGHLIGHT_BACKGROUND[] = {"#FFEA00", "#D22B2B", "#90EE90"};
 
 const int POSSIBLE = 0;
 const int FILL = 1;
@@ -64,7 +70,7 @@ const uint32_t POSSIBLE_COLOR[] = {
     0xffed57e0, // violet@
 };
 
-uint32_t BG_COLOR = 0xE6D8AD;
+const uint32_t BG_COLOR = 0xE6D8AD;
 // default color fo debug mode
 uint32_t figure_color[] = {0xff59ed9e, 0xffffb945, 0xff45dcf7};
 
@@ -74,19 +80,6 @@ uint32_t *gp;
 std::vector<uint8_t> gbuffer;
 VPIntInt fillStatistics, possibleStatistics;
 std::filesystem::path app_dir;
-
-std::string fillString(int possible);
-std::string dateTimeString(int o = 0);
-std::string timeString() { return dateTimeString(1); }
-std::string possibleStatString();
-std::string fillStatString();
-std::string savePng();
-Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int o);
-std::string get_screenshot_winapi();
-std::string toABGR(uint32_t c, bool onlyRGB = true);
-std::string code(const Figure &a);
-std::string fullPath(std::string name) { return (app_dir / name).string(); }
-std::string statisticsString(const std::array<bool, SHOW_STATISTICS_SIZE> show);
 
 struct PointInfo {
   int x;
@@ -128,6 +121,313 @@ struct FigureStatistics {
 };
 
 std::vector<FigureStatistics> figureStatistics;
+
+bool has_all_true(const bool f[N][N]) {
+  int i, j;
+  for (i = 0; i < N; ++i) {
+    if (std::ranges::all_of(f[i], [](bool val) { return val; })) {
+      return true;
+    }
+  }
+
+  for (j = 0; j < N; ++j) {
+    for (i = 0; i < N; ++i) {
+      if (!f[i][j])
+        break;
+    }
+    if (i == N)
+      return true;
+  }
+  return false;
+}
+
+PointInfo getBase(int sx, int width, int sy, int height, int o) {
+  int x, y;
+  for (y = 0; y < height; y++) {
+    auto p = gp + (y + sy) * gtotalWidth + sx;
+    for (x = 0; x < width; x++, p++) {
+      if (std::ranges::contains(F_COLOR[o], *p)) {
+        return {x + sx, y + sy, *p};
+      }
+    }
+  }
+  return {-1, -1, 0};
+}
+
+uint32_t getPixelColor(int x, int y) { return gp[x + y * gtotalWidth]; }
+
+std::string toABGR(uint32_t c, bool onlyRGB = 1) {
+  std::string s;
+  int i, j;
+  for (i = onlyRGB; i < 4; i++) {
+    j = (c >> (8 * (3 - i))) & 0xff;
+    s += (i == onlyRGB ? "" : ",") + std::to_string(j);
+  }
+  return s;
+}
+
+int colorDifference(uint32_t c1, uint32_t c2) {
+  int i, j, r = 0;
+  for (i = 0; i < 3; i++, c1 >>= 8, c2 >>= 8) {
+    j = (c1 & 0xff) - (c2 & 0xff);
+    r += std::abs(j);
+  }
+  return r;
+}
+
+// o=1 for debug outputs
+std::string dateTimeString(int o = 0) {
+  auto now = std::chrono::system_clock::now();
+  std::time_t time_now = std::chrono::system_clock::to_time_t(now);
+  std::tm *local_tm = std::localtime(&time_now);
+
+  std::stringstream ss;
+  ss << std::put_time(local_tm, o == 0 ? "%Y%m%d-%H%M%S" : "%H:%M:%S ");
+  return ss.str();
+}
+
+std::string timeString() { return dateTimeString(1); }
+
+Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int o) {
+  auto [crop_x, crop_y, crop_w, crop_h] = picture_rectangle;
+  if (o) {
+    crop_x += 6;
+    crop_y += 150;
+    crop_h = crop_w = 428;
+  }
+  int rowstride = gtotalWidth * 4;
+  uint8_t *crop_start_ptr =
+      reinterpret_cast<uint8_t *>(gp) + (crop_y * rowstride) + (crop_x * 4);
+
+  return Gdk::Pixbuf::create_from_data(crop_start_ptr, Gdk::Colorspace::RGB,
+                                       true, 8, crop_w, crop_h, rowstride);
+}
+
+std::string savePng() {
+  std::string s;
+  auto pixbuf = createPixbuf(0);
+  if (pixbuf) {
+    try {
+      s = dateTimeString() + ".png";
+      pixbuf->save("./" + SCREEN_DIR + '/' + s, "png", {"compression"}, {"9"});
+
+    } catch (const Glib::Error &ex) {
+      s = "error save PNG: " + std::string(ex.what());
+      // std::cout << s << "\n";
+    }
+  } else {
+    s = "cann't create pixbuf";
+    // std::cout << s << "\n";
+  }
+  return s;
+}
+
+std::string get_screenshot_winapi() {
+  HDC hScreenDC = GetDC(NULL);
+  HDC hMemoryDC = CreateCompatibleDC(hScreenDC);
+
+  int width = GetSystemMetrics(SM_CXSCREEN);
+  int height = GetSystemMetrics(SM_CYSCREEN);
+
+  HBITMAP hBitmap = CreateCompatibleBitmap(hScreenDC, width, height);
+  HBITMAP hOldBitmap = (HBITMAP)SelectObject(hMemoryDC, hBitmap);
+
+  BitBlt(hMemoryDC, 0, 0, width, height, hScreenDC, 0, 0, SRCCOPY);
+
+  BITMAPINFOHEADER bi;
+  bi.biSize = sizeof(BITMAPINFOHEADER);
+  bi.biWidth = width;
+  bi.biHeight = -height;
+  bi.biPlanes = 1;
+  bi.biBitCount = 32;
+  bi.biCompression = BI_RGB;
+  bi.biSizeImage = 0;
+
+  gbuffer.resize(width * height * 4);
+  GetDIBits(hMemoryDC, hBitmap, 0, height, gbuffer.data(), (BITMAPINFO *)&bi,
+            DIB_RGB_COLORS);
+
+  SelectObject(hMemoryDC, hOldBitmap);
+  DeleteObject(hBitmap);
+  DeleteDC(hMemoryDC);
+  ReleaseDC(NULL, hScreenDC);
+
+  for (size_t i = 0; i < gbuffer.size(); i += 4) {
+    uint8_t blue = gbuffer[i];
+    gbuffer[i] = gbuffer[i + 2]; // Red
+    gbuffer[i + 2] = blue;       // Blue
+                                 // gbuffer[i+3] Alpha
+  }
+
+  gp = reinterpret_cast<uint32_t *>(gbuffer.data());
+  gtotalWidth = width;
+
+  PointInfo pa;
+  int x, y, i, j, k, l, n, b, c;
+  std::string s;
+  pa = getBase(0, width, 0, height, 0);
+
+  x = pa.x;
+  y = pa.y;
+  if (x == -1)
+    return "not found";
+  x += DX;
+  y += DY;
+
+  if (x + STEP * (N - 1) >= width || y + STEP * (N - 1) >= height)
+    return std::format("bounds error {}", __LINE__);
+
+  // hs = "";
+  l = 0;
+  for (j = 0; j < N; j++) {
+    for (i = 0; i < N; i++) {
+      uint32_t k = getPixelColor(x + i * STEP, y + j * STEP);
+      field[j][i] = b = k != EMPTY_COLOR[j];
+      // if (b && !std::ranges::contains(POSSIBLE_COLOR, k)) {
+      //   hs += std::format("{}{} 0x{:x}\n", i, j, k);
+      //   l++;
+      // }
+    }
+  }
+  if (l > 7 || has_all_true(field)) {
+    return "bad field";
+  }
+
+  x += DX1;
+  y += DY1;
+  b = x;
+  c = y;
+  if (b + 2 * SX + SMALL_SQUARE_SIZE >= width ||
+      c + SMALL_SQUARE_SIZE >= height)
+    return std::format("bounds error {}", __LINE__);
+
+  i = pa.x - 120;
+  j = pa.y - 30;
+  if (i < 0 || y < 0) {
+    picture_rectangle = {0, 0, 1, 1};
+    return std::format("bounds error {}", __LINE__);
+  }
+  picture_rectangle = {i, j, 440, 730};
+
+  l = 0;
+  for (n = 0; n < 3; n++, b += SX) {
+    pa = getBase(b, SMALL_SQUARE_SIZE, c, SMALL_SQUARE_SIZE, 1);
+    if (pa.x == -1) {
+      gfigureIndex[n] = ALL_COUNT;
+      continue;
+    }
+    pa.y += 9;
+    pa.color = getPixelColor(pa.x, pa.y);
+    figure_color[l++] = pa.color; // only valid
+
+    VVInt a;
+    y = pa.y;
+    for (j = 0; j < 5; j++, y += STEPS) {
+      VInt q;
+      x = b + (pa.x - b) % STEPS;
+      for (i = 0; i < 5; i++, x += STEPS) {
+        k = colorDifference(pa.color, getPixelColor(x, y));
+        q.push_back(k < 77 ? 1 : 0);
+      }
+
+      if (std::ranges::find(q, 1) != q.end())
+        a.push_back(q);
+      else
+        break;
+    }
+
+    x = N, y = -1;
+    for (auto &numbers : a) {
+      auto first_it = std::find(numbers.begin(), numbers.end(), 1);
+      auto last_rit = std::find(numbers.rbegin(), numbers.rend(), 1);
+
+      int first_index = std::distance(numbers.begin(), first_it);
+      if (x > first_index) {
+        x = first_index;
+      }
+      int last_index =
+          (numbers.size() - 1) - std::distance(numbers.rbegin(), last_rit);
+      if (y < last_index) {
+        y = last_index;
+      }
+    }
+
+    for (auto &numbers : a) {
+      VInt sub_vector(numbers.begin() + x, numbers.begin() + y + 1);
+      numbers = sub_vector;
+    }
+
+    s = to_string(a);
+    gfigureIndex[n] = findFigureIndex(s);
+  }
+  return "";
+}
+
+std::string possibleStatString() {
+  auto &v = possibleStatistics;
+  std::string s = "possible statistics\n";
+  std::sort(v.begin(), v.end(), [](auto &a, auto &b) {
+    return a.second > b.second || a.second == b.second && a.first < b.first;
+  });
+
+  int sum = std::accumulate(v.begin(), v.end(), 0,
+                            [](int acc, auto &e) { return acc + e.second; });
+
+  double total = 0;
+  for (auto &a : v) {
+    s += std::format("{} {} {:.1f}%\n", a.first, a.second,
+                     a.second * 100. / sum);
+
+    auto d = std::pow(1 - double(a.first) / ALL_COUNT, 3);
+    total += d * a.second / sum;
+  }
+  s += std::format("total({}) {} bad {:.1f}%\n", v.size(), sum, total * 100);
+  return s;
+}
+
+std::string fillStatString() {
+  auto &v = fillStatistics;
+  std::string s = "fill statistics\n";
+  std::sort(v.begin(), v.end(), [](auto &a, auto &b) {
+    return a.second > b.second || a.second == b.second && a.first > b.first;
+  });
+  int sum = std::accumulate(v.begin(), v.end(), 0,
+                            [](int acc, auto &e) { return acc + e.second; });
+
+  for (auto &a : v) {
+    s += std::format("{} {} {:.1f}%\n", a.first, a.second,
+                     a.second * 100. / sum);
+  }
+  s += std::format("total({}) {}\n", v.size(), sum);
+  return s;
+}
+
+std::string
+statisticsString(const std::array<bool, SHOW_STATISTICS_SIZE> show) {
+  std::string s;
+  if (show[FIGURE]) {
+    int total = 0, max = 0, squares = 0;
+    for (auto &e : figureStatistics) {
+      e.count();
+      total += e.total;
+      squares += e.squares;
+      if (e.total > max) {
+        max = e.total;
+      }
+    }
+
+    std::sort(figureStatistics.begin(), figureStatistics.end());
+
+    for (const auto &e : figureStatistics)
+      s += e.to_string(total, max);
+
+    s += std::format("figures {}\nsquares {}\n", total, toString(squares, ','));
+  }
+  return s + (show[POSSIBLE] ? possibleStatString() : "") +
+         (show[FILL] ? fillStatString() : "");
+}
+
+std::string fullPath(std::string name) { return (app_dir / name).string(); }
 
 class Window;
 Window *mainWnd;
@@ -228,7 +528,7 @@ public:
     i = 0;
     for (auto &a : m_highlight_tag) {
       a = buffer->create_tag(std::to_string(i));
-      a->property_background() = i ? "red" : "yellow";
+      a->property_background() = HIGHLIGHT_BACKGROUND[i];
       i++;
     }
 
@@ -242,7 +542,7 @@ public:
 
     signal_close_request().connect(
         [this]() {
-          timer = 0; // todo
+          timer = 0;
           addLog(0);
           saveConfig();
           return false;
@@ -306,7 +606,6 @@ public:
         file << a;
       }
     } else {
-      // bool b[] = {1, 1, 1};
       file << statisticsString({1, 1, 1}) << "\n";
     }
   }
@@ -537,19 +836,21 @@ public:
     }
 
     if (timer) {
-      // pri
       gets();
       for (i = 0; i < NT; i++) {
         m_text_view[i].get_buffer()->set_text(m_out[i]);
       }
       if (!best.isInvalid()) {
         if (best.isPrizeInvalid()) {
-          i = best.get(POSSIBLE_AFTER) <= highlight_n ? 0 : -1;
+          i = best.get(POSSIBLE_AFTER) <= highlight_n
+                  ? 0
+                  : (best.order_important ? 2 : -1);
         } else {
           i = 1;
         }
         highlightText(i);
       }
+      m_drawing_area.queue_draw();
     }
     return !DEBUG_MODE;
   }
@@ -580,7 +881,7 @@ public:
         return;
       }
     }
-    m_drawing_area.queue_draw();
+    // m_drawing_area.queue_draw();
 
     auto ne = getNonEmptyIndex();
 
@@ -682,7 +983,7 @@ public:
   Gtk::Label m_label[3];
   Gtk::DrawingArea m_drawing_area;
   std::string m_prev, m_prevfields;
-  Glib::RefPtr<Gtk::TextTag> m_highlight_tag[2];
+  Glib::RefPtr<Gtk::TextTag> m_highlight_tag[std::size(HIGHLIGHT_BACKGROUND)];
   int m_timer_interval = START_TIMER;
   bool m_need_restart = false;
   std::string m_title;
@@ -726,8 +1027,9 @@ public:
     for (auto &a : m_spin_button) {
       Glib::RefPtr<Gtk::Adjustment> adjustment;
       if (i) {
-        adjustment = Gtk::Adjustment::create(mainWnd->m_timer_interval, 500,
-                                             5000, 50, 10 * 50, 0);
+        adjustment =
+            Gtk::Adjustment::create(mainWnd->m_timer_interval, TIMER_MIN,
+                                    TIMER_MAX, TIME_STEP, 10 * TIME_STEP, 0);
       } else
         adjustment =
             Gtk::Adjustment::create(highlight_n, 1, ALL_COUNT, 1, 10, 0);
@@ -815,9 +1117,12 @@ public:
     m_vbox.append(m_main_vbox);
 
     box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 2);
-    auto *my_label = Gtk::make_managed<Gtk::Label>("timer");
-    box->append(*my_label);
+    label = Gtk::make_managed<Gtk::Label>("timer");
+    box->append(*label);
     box->append(m_spin_button[1]);
+    label = Gtk::make_managed<Gtk::Label>(
+        std::format("{} - {}", TIMER_MIN, TIMER_MAX));
+    box->append(*label);
     m_vbox.append(*box);
 
     m_vbox.append(m_hbox_buttons);
@@ -837,7 +1142,8 @@ public:
   }
 
   void setFrameCheck() {
-    m_frame_checkbox->set_active(m_check[1].get_active() || m_check[2].get_active());
+    m_frame_checkbox->set_active(m_check[1].get_active() ||
+                                 m_check[2].get_active());
   }
 
   bool on_window_close() {
@@ -893,288 +1199,4 @@ int main(int argc, char *argv[]) {
     }
   });
   return app->make_window_and_run<Window>(argc, argv);
-}
-
-PointInfo getBase(int sx, int width, int sy, int height, int o) {
-  int x, y;
-  for (y = 0; y < height; y++) {
-    auto p = gp + (y + sy) * gtotalWidth + sx;
-    for (x = 0; x < width; x++, p++) {
-      if (std::ranges::contains(F_COLOR[o], *p)) {
-        return {x + sx, y + sy, *p};
-      }
-    }
-  }
-  return {-1, -1, 0};
-}
-
-uint32_t getPixelColor(int x, int y) { return gp[x + y * gtotalWidth]; }
-
-std::string toABGR(uint32_t c, bool onlyRGB) {
-  std::string s;
-  int i, j;
-  for (i = onlyRGB; i < 4; i++) {
-    j = (c >> (8 * (3 - i))) & 0xff;
-    s += (i == onlyRGB ? "" : ",") + std::to_string(j);
-  }
-  return s;
-}
-
-int colorDifference(uint32_t c1, uint32_t c2) {
-  int i, j, r = 0;
-  for (i = 0; i < 3; i++, c1 >>= 8, c2 >>= 8) {
-    j = (c1 & 0xff) - (c2 & 0xff);
-    r += std::abs(j);
-  }
-  return r;
-}
-
-// o=1 for debug outputs
-std::string dateTimeString(int o) {
-  auto now = std::chrono::system_clock::now();
-  std::time_t time_now = std::chrono::system_clock::to_time_t(now);
-  std::tm *local_tm = std::localtime(&time_now);
-
-  std::stringstream ss;
-  ss << std::put_time(local_tm, o == 0 ? "%Y%m%d-%H%M%S" : "%H:%M:%S ");
-  return ss.str();
-}
-
-Glib::RefPtr<Gdk::Pixbuf> createPixbuf(int o) {
-  auto [crop_x, crop_y, crop_w, crop_h] = picture_rectangle;
-  if (o) {
-    crop_x += 6;
-    crop_y += 150;
-    crop_h = crop_w = 428;
-  }
-  int rowstride = gtotalWidth * 4;
-  uint8_t *crop_start_ptr =
-      reinterpret_cast<uint8_t *>(gp) + (crop_y * rowstride) + (crop_x * 4);
-
-  return Gdk::Pixbuf::create_from_data(crop_start_ptr, Gdk::Colorspace::RGB,
-                                       true, 8, crop_w, crop_h, rowstride);
-}
-
-std::string savePng() {
-  std::string s;
-  auto pixbuf = createPixbuf(0);
-  if (pixbuf) {
-    try {
-      s = dateTimeString() + ".png";
-      pixbuf->save("./" + SCREEN_DIR + '/' + s, "png", {"compression"}, {"9"});
-
-    } catch (const Glib::Error &ex) {
-      s = "error save PNG: " + std::string(ex.what());
-      // std::cout << s << "\n";
-    }
-  } else {
-    s = "cann't create pixbuf";
-    // std::cout << s << "\n";
-  }
-  return s;
-}
-
-std::string get_screenshot_winapi() {
-  HDC hScreenDC = GetDC(NULL);
-  HDC hMemoryDC = CreateCompatibleDC(hScreenDC);
-
-  int width = GetSystemMetrics(SM_CXSCREEN);
-  int height = GetSystemMetrics(SM_CYSCREEN);
-
-  HBITMAP hBitmap = CreateCompatibleBitmap(hScreenDC, width, height);
-  HBITMAP hOldBitmap = (HBITMAP)SelectObject(hMemoryDC, hBitmap);
-
-  BitBlt(hMemoryDC, 0, 0, width, height, hScreenDC, 0, 0, SRCCOPY);
-
-  BITMAPINFOHEADER bi;
-  bi.biSize = sizeof(BITMAPINFOHEADER);
-  bi.biWidth = width;
-  bi.biHeight = -height;
-  bi.biPlanes = 1;
-  bi.biBitCount = 32;
-  bi.biCompression = BI_RGB;
-  bi.biSizeImage = 0;
-
-  gbuffer.resize(width * height * 4);
-  GetDIBits(hMemoryDC, hBitmap, 0, height, gbuffer.data(), (BITMAPINFO *)&bi,
-            DIB_RGB_COLORS);
-
-  SelectObject(hMemoryDC, hOldBitmap);
-  DeleteObject(hBitmap);
-  DeleteDC(hMemoryDC);
-  ReleaseDC(NULL, hScreenDC);
-
-  for (size_t i = 0; i < gbuffer.size(); i += 4) {
-    uint8_t blue = gbuffer[i];
-    gbuffer[i] = gbuffer[i + 2]; // Red
-    gbuffer[i + 2] = blue;       // Blue
-                                 // gbuffer[i+3] Alpha
-  }
-
-  gp = reinterpret_cast<uint32_t *>(gbuffer.data());
-  gtotalWidth = width;
-
-  PointInfo pa;
-  int x, y, i, j, k, l, n, b, c;
-  std::string s;
-  pa = getBase(0, width, 0, height, 0);
-
-  x = pa.x;
-  y = pa.y;
-  if (x == -1)
-    return "not found";
-  x += DX;
-  y += DY;
-
-  if (x + STEP * (N - 1) >= width || y + STEP * (N - 1) >= height)
-    return std::format("bounds error {}", __LINE__);
-
-  // hs = "";
-  l = 0;
-  for (j = 0; j < N; j++) {
-    for (i = 0; i < N; i++) {
-      uint32_t k = getPixelColor(x + i * STEP, y + j * STEP);
-      field[j][i] = b = k != EMPTY_COLOR[j];
-      // if (b && !std::ranges::contains(POSSIBLE_COLOR, k)) {
-      //   hs += std::format("{}{} 0x{:x}\n", i, j, k);
-      //   l++;
-      // }
-    }
-  }
-  if (l > 7) {
-    return "bad field";
-  }
-
-  x += DX1;
-  y += DY1;
-  b = x;
-  c = y;
-  if (b + 2 * SX + SMALL_SQUARE_SIZE >= width ||
-      c + SMALL_SQUARE_SIZE >= height)
-    return std::format("bounds error {}", __LINE__);
-
-  i = pa.x - 120;
-  j = pa.y - 30;
-  if (i < 0 || y < 0) {
-    picture_rectangle = {0, 0, 1, 1};
-    return std::format("bounds error {}", __LINE__);
-  }
-  picture_rectangle = {i, j, 440, 730};
-
-  l = 0;
-  for (n = 0; n < 3; n++, b += SX) {
-    pa = getBase(b, SMALL_SQUARE_SIZE, c, SMALL_SQUARE_SIZE, 1);
-    if (pa.x == -1) {
-      gfigureIndex[n] = ALL_COUNT;
-      continue;
-    }
-    pa.y += 9;
-    pa.color = getPixelColor(pa.x, pa.y);
-    figure_color[l++] = pa.color; // only valid
-
-    VVInt a;
-    y = pa.y;
-    for (j = 0; j < 5; j++, y += STEPS) {
-      VInt q;
-      x = b + (pa.x - b) % STEPS;
-      for (i = 0; i < 5; i++, x += STEPS) {
-        k = colorDifference(pa.color, getPixelColor(x, y));
-        q.push_back(k < 77 ? 1 : 0);
-      }
-
-      if (std::ranges::find(q, 1) != q.end())
-        a.push_back(q);
-      else
-        break;
-    }
-
-    x = N, y = -1;
-    for (auto &numbers : a) {
-      auto first_it = std::find(numbers.begin(), numbers.end(), 1);
-      auto last_rit = std::find(numbers.rbegin(), numbers.rend(), 1);
-
-      int first_index = std::distance(numbers.begin(), first_it);
-      if (x > first_index) {
-        x = first_index;
-      }
-      int last_index =
-          (numbers.size() - 1) - std::distance(numbers.rbegin(), last_rit);
-      if (y < last_index) {
-        y = last_index;
-      }
-    }
-
-    for (auto &numbers : a) {
-      VInt sub_vector(numbers.begin() + x, numbers.begin() + y + 1);
-      numbers = sub_vector;
-    }
-
-    s = to_string(a);
-    gfigureIndex[n] = findFigureIndex(s);
-  }
-  return "";
-}
-
-std::string possibleStatString() {
-  auto &v = possibleStatistics;
-  std::string s = "possible statistics\n";
-  std::sort(v.begin(), v.end(), [](auto &a, auto &b) {
-    return a.second > b.second || a.second == b.second && a.first < b.first;
-  });
-
-  int sum = std::accumulate(v.begin(), v.end(), 0,
-                            [](int acc, auto &e) { return acc + e.second; });
-
-  double total = 0;
-  for (auto &a : v) {
-    s += std::format("{} {} {:.1f}%\n", a.first, a.second,
-                     a.second * 100. / sum);
-
-    auto d = std::pow(1 - double(a.first) / ALL_COUNT, 3);
-    total += d * a.second / sum;
-  }
-  s += std::format("total({}) {} bad {:.1f}%\n", v.size(), sum, total * 100);
-  return s;
-}
-
-std::string fillStatString() {
-  auto &v = fillStatistics;
-  std::string s = "fill statistics\n";
-  std::sort(v.begin(), v.end(), [](auto &a, auto &b) {
-    return a.second > b.second || a.second == b.second && a.first > b.first;
-  });
-  int sum = std::accumulate(v.begin(), v.end(), 0,
-                            [](int acc, auto &e) { return acc + e.second; });
-
-  for (auto &a : v) {
-    s += std::format("{} {} {:.1f}%\n", a.first, a.second,
-                     a.second * 100. / sum);
-  }
-  s += std::format("total({}) {}\n", v.size(), sum);
-  return s;
-}
-
-std::string
-statisticsString(const std::array<bool, SHOW_STATISTICS_SIZE> show) {
-  std::string s;
-  if (show[FIGURE]) {
-    int total = 0, max = 0, squares = 0;
-    for (auto &e : figureStatistics) {
-      e.count();
-      total += e.total;
-      squares += e.squares;
-      if (e.total > max) {
-        max = e.total;
-      }
-    }
-
-    std::sort(figureStatistics.begin(), figureStatistics.end());
-
-    for (const auto &e : figureStatistics)
-      s += e.to_string(total, max);
-
-    s += std::format("figures {}\nsquares {}\n", total, toString(squares, ','));
-  }
-  return s + (show[POSSIBLE] ? possibleStatString() : "") +
-         (show[FILL] ? fillStatString() : "");
 }

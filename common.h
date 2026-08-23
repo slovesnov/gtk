@@ -62,6 +62,9 @@ using VString = std::vector<std::string>;
 using PIntInt = std::pair<int, int>;
 using VPIntInt = std::vector<PIntInt>;
 
+// 0-1
+#define ESTIMATE_TYPE 0
+// #define FIELDS_FIRST
 const int N = 8;
 const int NT = 3;
 const int ADD_INDEX = 1;
@@ -165,7 +168,7 @@ void copy(const bool src[N][N], bool dest[N][N]) {
   std::copy(&src[0][0], &src[0][0] + N * N, &dest[0][0]);
 }
 
-int countFill(const bool field[N][N]) {
+int countFill(const bool f[N][N]) {
   return std::count(&f[0][0], &f[0][0] + N * N, true);
 }
 
@@ -174,13 +177,9 @@ double successProbability(int i) {
 }
 
 std::string possibleString(int i, const int o) {
+  std::string s[] = {" {} {:.0f}%", "possible {} {:.2f}%", "{} {:.1f}%"};
   auto d = successProbability(i) * 100;
-  if (o == 0)
-    return std::format(" {} {:.0f}%", i, d);
-  else if (o == 1)
-    return std::format("possible {} {:.2f}%", i, d);
-  else
-    return std::format("{} {:.1f}%", i, d);
+  return std::vformat(s[o], std::make_format_args(i, d));
 }
 
 struct MakeMoveResult {
@@ -361,8 +360,6 @@ int countPossible(const bool field[N][N]) {
   }
 }
 
-// #define FIELDS_FIRST
-
 #ifdef FIELDS_FIRST
 enum { POSSIBLE_AFTER, FIELDS, SCORE, ESTIMATE };
 #else
@@ -371,7 +368,7 @@ enum { POSSIBLE_AFTER, SCORE, FIELDS, ESTIMATE };
 
 struct Info {
   int x, y, x1, y1, x2, y2, lines, n[3], nlines[3], prize_x, prize_y;
-  bool field[N][N], end, prize_add;
+  bool field[N][N], end, prize_add, order_important;
   uint32_t fullestimate;
   // field - field after move
   void operator=(const Info &e) {
@@ -389,6 +386,7 @@ struct Info {
     prize_x = e.prize_x;
     prize_y = e.prize_y;
     prize_add = e.prize_add;
+    order_important = e.order_important;
     fullestimate = e.fullestimate;
   }
 
@@ -398,14 +396,19 @@ struct Info {
   - possibleAfter 1-39, 6bits
   - 64-fieldC 0-64, 8bits
   - score (can be summed) 1- 9+360=369 9bits
-  - estimate (can be summed) for figure with <=5 dots <=3*5, for square3 (only
-  figure with >5 dots) 4corners*2+4*1=10 5bits, for 3 figures suppose<=32
+  - ESTIMATE_TYPE == 0 estimate (can be summed) for figure with <=5 dots <=3*5,
+  for square3 (only figure with >5 dots) 4corners*2+4*1=10 5bits, for 3 figures
+  suppose<=32
   */
   static const int TOTAL_PARAMS = 4;
   static const int POSSIBLE_AFTER_BITS = 6;
   static const int FIELDS_BITS = 8;
   static const int SCORE_BITS = 9;
+#if ESTIMATE_TYPE == 0
   static const int ESTIMATE_BITS = 5;
+#else
+  static const int ESTIMATE_BITS = 6;
+#endif
 
   using Params = std::array<int, TOTAL_PARAMS>;
   inline static constexpr Params BITS = []() {
@@ -725,18 +728,17 @@ VInfo possibleMoves(int findex, const VInt &recent, const bool field[N][N]) {
         if (field[y][x]) {
           goto l183;
         }
-        // e += (x == 0 ? 0 : field[y][x - 1]) +
-        //      (x == N - 1 ? 0 : field[y][x + 1]) +
-        //      (y == 0 ? 0 : field[y - 1][x]) +
-        //      (y == N - 1 ? 0 : field[y + 1][x]);
-        // e += (x == 0 ? 1 : 2*field[y][x - 1]) +
-        //      (x == N - 1 ? 1 : 2*field[y][x + 1]) +
-        //      (y == 0 ? 1 : 2*field[y - 1][x]) +
-        //      (y == N - 1 ? 1 : 2*field[y + 1][x]);
+#if ESTIMATE_TYPE == 0
         e += (x == 0 ? 1 : field[y][x - 1]) +
              (x == N - 1 ? 1 : field[y][x + 1]) +
              (y == 0 ? 1 : field[y - 1][x]) +
              (y == N - 1 ? 1 : field[y + 1][x]);
+#else
+        e += (x == 0 ? 1 : 2 * field[y][x - 1]) +
+             (x == N - 1 ? 1 : 2 * field[y][x + 1]) +
+             (y == 0 ? 1 : 2 * field[y - 1][x]) +
+             (y == N - 1 ? 1 : 2 * field[y + 1][x]);
+#endif
         fill[y][x] = 1;
       }
 
@@ -939,11 +941,11 @@ VInfo getPrizesInfo1() {
         copy(field, original);
         make_move(p.x, p.y, orig, field);
         findBest();
-        if (!best.isInvalid()) { // todo
-          info.x = p.x;
-          info.y = p.y;
-          info.n[0] = i;
-          v.push_back(info);
+        if (!best.isInvalid()) {
+          best.x2 = p.x;
+          best.y2 = p.y;
+          best.n[2] = i;
+          v.push_back(best);
         }
         copy(original, field);
       }
@@ -962,9 +964,9 @@ std::string getPrizesString() {
       return ALWAYS_GAME_OVER;
     else {
       // seems never happens
-      s = "first move and prize after\n";
+      s = "TODO first move and prize after\n";
       for (auto &a : v) {
-        s += std::format("{}{}={}\n", a.x, a.y, a.n[0]);
+        s += std::format("{}{}={}\n", a.x2, a.y2, a.n[2]);
       }
       return s;
     }
@@ -1006,9 +1008,11 @@ std::string bestString() {
     if (v.size() == 1) {
       best.n[0] = 0;
     } else {
+      i = same(v, field);
       const std::string ss[] = {"order important", "any order",
                                 "different score"};
-      s += ss[same(v, field)] + "\n";
+      best.order_important = i != 1;
+      s += ss[i] + "\n";
     }
     std::string v[] = {fillString(best.get(FIELDS)),
                        possibleString(best.get(POSSIBLE_AFTER), 1),

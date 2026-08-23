@@ -5,3 +5,5 @@ log*.txt
 macro_gcc.txt
 deploy.txt
 app.cfg
+console1.cpp
+console2.cpp

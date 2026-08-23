@@ -99,56 +99,63 @@ std::set<uint32_t> set2;
 int skipc2;
 #endif
 
-std::string make_string_spaced() { return ""; }
-
-template <typename First, typename... Args>
-std::string make_string_spaced(const First &first, const Args &...args) {
-  std::ostringstream ss;
-  ss << first;
-  ((ss << " " << args), ...);
-  return ss.str();
-}
-
-template <typename... Args>
-void print_line_helper(std::source_location loc, Args &&...args) {
-  if constexpr (sizeof...(Args) > 0) {
-    std::cout << make_string_spaced(args...) << " ";
-  }
+void show_location(std::source_location loc) {
   std::cout << loc.file_name() << ":" << loc.line() << "\n";
 }
 
-template<typename H1> std::ostream& show_variables(std::ostream& out, const char* label, H1&& value) {
-  return out << label << "=" << std::forward<H1>(value) << '\n';
+template <typename... Args>
+void show_variables(std::string_view label, Args &&...args) {
+  (
+      [&label](auto &&value) {
+        size_t comma_pos = label.find(',');
+        std::string_view current_name = (comma_pos != std::string_view::npos)
+                                            ? label.substr(0, comma_pos)
+                                            : label;
+
+        std::cout << current_name << "="
+                  << std::forward<decltype(value)>(value);
+
+        if (comma_pos == std::string_view::npos) {
+          std::cout << ' ';
+        } else {
+          std::cout << ", ";
+          label = label.substr(comma_pos + 1);
+          size_t next_non_space = label.find_first_not_of(' ');
+          if (next_non_space != std::string_view::npos) {
+            label = label.substr(next_non_space);
+          }
+        }
+      }(std::forward<Args>(args)),
+      ...);
 }
 
-template<typename H1, typename ...T> std::ostream& show_variables(std::ostream& out, const char* label, H1&& value, T&&... rest) {
-  const char* pcomma = strchr(label, ',');
-  return show_variables(out.write(label, pcomma - label) << "=" << std::forward<H1>(value) << ',',
-              pcomma + 1,
-              std::forward<T>(rest)...);
+template <typename... Args> void print_variables(Args &&...args) {
+  if constexpr (sizeof...(Args) > 0) {
+    [](auto &&first, auto &&...rest) {
+      std::cout << std::forward<decltype(first)>(first);
+      ((std::cout << " " << std::forward<decltype(rest)>(rest)), ...);
+    }(std::forward<Args>(args)...);
+
+    std::cout << " ";
+  }
 }
 
 // pr("123",i,v);
 #define pr(...)                                                                \
-  print_line_helper(std::source_location::current() __VA_OPT__(, ) __VA_ARGS__);
+  print_variables(__VA_ARGS__);                                                \
+  show_location(std::source_location::current());
 
-#define pri pr()
+#define pri show_location(std::source_location::current());
 
 // pr1("error {} {}", v[i], v[i + 1]);
 #define pr1(fmt, ...)                                                          \
-  std::cout << std::format(fmt " {}:{}\n" __VA_OPT__(, )                       \
-                               __VA_ARGS__ __VA_OPT__(, )                      \
-                                   std::source_location::current()             \
-                                       .file_name(),                           \
-                           std::source_location::current().line());
+  std::cout << std::format(fmt " " __VA_OPT__(, ) __VA_ARGS__);                \
+  show_location(std::source_location::current());
 
-// prv(i,v);
+// prv("123",i,v);
 #define prv(...)                                                               \
-  show_variables(std::cout, #__VA_ARGS__, __VA_ARGS__);                        \
-  std::cout << std::source_location::current().file_name() << ":"              \
-            << std::source_location::current().line() << "\n";
-
-
+  show_variables(#__VA_ARGS__, __VA_ARGS__);                                   \
+  show_location(std::source_location::current());
 
 bool same(const bool f1[N][N], const bool f2[N][N]) {
   return std::equal(&f1[0][0], &f1[0][0] + N * N, &f2[0][0]);
@@ -159,14 +166,7 @@ void copy(const bool src[N][N], bool dest[N][N]) {
 }
 
 int countFill(const bool field[N][N]) {
-  int i, j, c = 0;
-  for (i = 0; i < N; i++) {
-    for (j = 0; j < N; j++) {
-      if (field[j][i])
-        c++;
-    }
-  }
-  return c;
+  return std::count(&f[0][0], &f[0][0] + N * N, true);
 }
 
 double successProbability(int i) {
@@ -361,7 +361,7 @@ int countPossible(const bool field[N][N]) {
   }
 }
 
-//#define FIELDS_FIRST
+// #define FIELDS_FIRST
 
 #ifdef FIELDS_FIRST
 enum { POSSIBLE_AFTER, FIELDS, SCORE, ESTIMATE };

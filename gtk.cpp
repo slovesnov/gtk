@@ -549,8 +549,8 @@ public:
         },
         false);
 
-    property_suspended().signal_changed().connect(
-        [this]() { on_window_suspended_changed(); });
+    // property_suspended().signal_changed().connect(
+    //     [this]() { on_window_suspended_changed(); });
   }
 
   void showOptions();
@@ -560,12 +560,11 @@ public:
     m_need_restart = true;
   }
 
-  void on_window_suspended_changed() {
-    if (property_suspended().get_value()) {
-      setUpdateTimer(0);
-    } else {
-    }
-  }
+  // void on_window_suspended_changed() {
+  //   if (property_suspended().get_value()) {
+  //     setUpdateTimer(0);
+  //   }
+  // }
 
   void loadConfig() {
     std::ifstream file(fullPath(CONFIG_FILE));

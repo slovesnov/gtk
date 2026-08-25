@@ -129,7 +129,7 @@ void show_variables(std::string_view label, Args &&...args) {
 }
 
 template <typename... Args> void print_variables(Args &&...args) {
-  ((std::cout << std::forward<decltype(args)>(args) << " "), ...);
+  ((std::cout << std::forward<Args>(args) << " "), ...);
 }
 
 // pr("123",i,v);

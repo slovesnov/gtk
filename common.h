@@ -102,10 +102,6 @@ std::set<uint32_t> set2;
 int skipc2;
 #endif
 
-void show_location(std::source_location loc) {
-  std::cout << loc.file_name() << ":" << loc.line() << "\n";
-}
-
 template <typename... Args>
 void show_variables(std::string_view label, Args &&...args) {
   (
@@ -133,32 +129,27 @@ void show_variables(std::string_view label, Args &&...args) {
 }
 
 template <typename... Args> void print_variables(Args &&...args) {
-  if constexpr (sizeof...(Args) > 0) {
-    [](auto &&first, auto &&...rest) {
-      std::cout << std::forward<decltype(first)>(first);
-      ((std::cout << " " << std::forward<decltype(rest)>(rest)), ...);
-    }(std::forward<Args>(args)...);
-
-    std::cout << " ";
-  }
+  ((std::cout << std::forward<decltype(args)>(args) << " "), ...);
 }
 
 // pr("123",i,v);
 #define pr(...)                                                                \
   print_variables(__VA_ARGS__);                                                \
-  show_location(std::source_location::current());
+  pri
 
-#define pri show_location(std::source_location::current());
+#define pri                                                                    \
+  std::cout << std::source_location::current().file_name() << ":"              \
+            << std::source_location::current().line() << "\n";
 
 // pr1("error {} {}", v[i], v[i + 1]);
 #define pr1(fmt, ...)                                                          \
   std::cout << std::format(fmt " " __VA_OPT__(, ) __VA_ARGS__);                \
-  show_location(std::source_location::current());
+  pri
 
 // prv("123",i,v);
 #define prv(...)                                                               \
   show_variables(#__VA_ARGS__, __VA_ARGS__);                                   \
-  show_location(std::source_location::current());
+  pri
 
 bool same(const bool f1[N][N], const bool f2[N][N]) {
   return std::equal(&f1[0][0], &f1[0][0] + N * N, &f2[0][0]);

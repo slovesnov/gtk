@@ -1,8 +1,8 @@
 ------- GTK MODE  -------
 cd e:/slovesno/gtk
-clear && g++ -std=c++23 gtk.cpp app.res `pkg-config gtkmm-4.0 --cflags --libs` -lgdi32 && ./a.exe
+clear && g++ -std=c++23 -O3 gtk.cpp app.res `pkg-config gtkmm-4.0 --cflags --libs` -lgdi32 && ./a.exe
 ./a.exe
-g++ -std=c++23 gtk.cpp app.res -o gtk.exe `pkg-config gtkmm-4.0 --cflags --libs` -mwindows
+g++ -std=c++23 -O3 gtk.cpp app.res -o gtk.exe `pkg-config gtkmm-4.0 --cflags --libs` -mwindows
 
 ------- CONSOLE MODE  -------
 clear && g++ -std=c++23 console.cpp -o console.exe && ./console.exe
@@ -26,3 +26,9 @@ ldd a.exe | grep -E '/mingw64' | awk '{print $3}'
 mkdir -p deploy/bin
 cp my_app.exe deploy/bin/
 ldd a.exe | grep -E '/mingw64|/ucrt64' | awk '{print $3}' | xargs -I {} cp {} deploy/bin/
+
+
+clang++ gtk.cpp app.res $(pkg-config --cflags --libs gtkmm-4.0) -std=c++23 -mwindows -o app.exe
+
+
+ldd words.exe | grep -E '/words' | awk '{print $1}' | xargs -I {} cp {} d/

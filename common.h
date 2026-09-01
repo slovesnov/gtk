@@ -139,7 +139,8 @@ template <typename... Args> void print_variables(Args &&...args) {
 
 #define pri                                                                    \
   std::cout << std::source_location::current().file_name() << ":"              \
-            << std::source_location::current().line() << "\n";
+            << std::source_location::current().line() << " "                   \
+            << std::source_location::current().function_name() << "\n";
 
 // pr1("error {} {}", v[i], v[i + 1]);
 #define pr1(fmt, ...)                                                          \

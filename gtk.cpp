@@ -402,11 +402,12 @@ std::string fillStatString() {
   return s;
 }
 
-std::string
+std::pair<std::string, bool>
 statisticsString(const std::array<bool, SHOW_STATISTICS_SIZE> show) {
   std::string s;
+  int total = 0;
   if (show[FIGURE]) {
-    int total = 0, max = 0, squares = 0;
+    int max = 0, squares = 0;
     for (auto &e : figureStatistics) {
       e.count();
       total += e.total;
@@ -423,8 +424,9 @@ statisticsString(const std::array<bool, SHOW_STATISTICS_SIZE> show) {
 
     s += std::format("figures {}\nsquares {}\n", total, toString(squares, ','));
   }
-  return s + (show[POSSIBLE] ? possibleStatString() : "") +
-         (show[FILL] ? fillStatString() : "");
+  return {s + (show[POSSIBLE] ? possibleStatString() : "") +
+              (show[FILL] ? fillStatString() : ""),
+          total != 0};
 }
 
 std::string fullPath(std::string name) { return (app_dir / name).string(); }
@@ -595,6 +597,14 @@ public:
   }
 
   void addLog(int o) {
+    std::pair<std::string,bool> p;
+    if (!o) {
+      p = statisticsString({1, 1, 1});
+      if (!p.second) {
+        return;
+      }
+    }
+
     std::ofstream file(fullPath(o ? LOG_FILE : LOG_FILE_STAT), std::ios::app);
     std::string m(5, '-');
     file << "\n" << m << " " << dateTimeString() << " " << m << "\n";
@@ -605,7 +615,7 @@ public:
         file << a;
       }
     } else {
-      file << statisticsString({1, 1, 1}) << "\n";
+      file << p.first << "\n";
     }
   }
 
@@ -941,7 +951,7 @@ public:
       }
     }
 
-    s += statisticsString(show_statistics) + se;
+    s += statisticsString(show_statistics).first + se;
     m_out[0] = s;
     m_out[1] = bestString();
     m_out[2] = std::format(
